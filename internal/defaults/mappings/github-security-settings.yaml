@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+
+mappings:
+  - id: "github-security-settings"
+    reason: "Apply GitHub security best practices"
+    steps:
+      - id: "enable-mfa"
+        action: "enable-mfa"
+        parameters:
+          organization: "{{.organization}}"
+        reason: "Enable MFA requirement for the organization"

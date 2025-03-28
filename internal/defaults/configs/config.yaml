@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
+
+templates_dir: "templates"
+actions_dir: "actions"

@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: Apache-2.0
+
+mappings:
+  - id: "security-md-workflow"
+    reason: "Create and push security documentation"
+    steps:
+      - id: "create-security-branch"
+        action: "create-branch"
+        parameters:
+          branch_name: "add-security-docs"
+        reason: "Create branch for security documentation"
+      
+      - id: "add-security-docs"
+        action: "add-security-md"
+        parameters:
+          name: "{{.project_name}}"
+          emails: "{{.security_contacts}}"
+        reason: "Add SECURITY.md file"
+      
+      - id: "add-security-files-to-git"
+        action: "git-add"
+        parameters:
+          files: "SECURITY.md"
+        depends_on: ["add-security-docs"]
+        reason: "Stage security documentation files"
+      
+      - id: "commit-security-docs"
+        action: "git-commit"
+        parameters:
+          message: "Add security documentation"
+        depends_on: ["add-security-files-to-git"]
+        reason: "Commit security documentation to branch"
+      
+      - id: "push-security-branch"
+        action: "git-push"
+        parameters:
+          branch: "add-security-docs"
+        depends_on: ["commit-security-docs"]
+        reason: "Push branch to remote repository"
+      
+      - id: "create-security-pr"
+        action: "create-pr"
+        parameters:
+          title: "Add security documentation"
+          body: "This PR adds a SECURITY.md file to document security procedures for this project."
+          repo: "{{.organization}}/{{.repo_name}}"
+        depends_on: ["push-security-branch"]
+        reason: "Create PR for security documentation"

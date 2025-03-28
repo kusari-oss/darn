@@ -1,0 +1,11 @@
+{
+    "repo": "darn",
+    "owner": "kusari-oss",
+    "organization": "kusari-oss",
+    "name": "Darn Security Tool",
+    "branch": "main",
+    "emails": [
+      "security@example.com",
+      "admin@example.com"
+    ]
+  }

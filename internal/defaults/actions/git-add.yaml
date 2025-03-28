@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: git-add
+type: cli
+description: "Stage changes to files"
+command: "git"
+args:
+  - "add"
+  - "{{.files}}"
+schema:
+  type: "object"
+  required: ["files"]
+  properties:
+    files:
+      type: "string"
+      description: "Files to stage (space-separated list or glob pattern)"

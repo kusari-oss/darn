@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: enable-mfa
+type: cli
+description: "Enable MFA for the organization"
+command: "gh"
+args: 
+  - "api"
+  - "--method"
+  - "PATCH"
+  - "orgs/{{.organization}}"
+  - "--field"
+  - "two_factor_requirement_enabled=true"
+labels:
+  platform: ["github"]
+  framework: ["something-else", "security-baseline"]
+
+# JSON schema for validating parameters
+schema: {
+  "type": "object",
+  "required": ["organization"],
+  "properties": {
+    "organization": {
+      "type": "string",
+      "description": "GitHub organization name"
+    }
+  }
+}

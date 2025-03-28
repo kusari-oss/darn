@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: create-pr
+type: cli
+description: "Create a pull request"
+command: "gh"
+args:
+  - "pr"
+  - "create"
+  - "--title"
+  - "{{.title}}"
+  - "--body"
+  - "{{.body}}"
+  - "-R"
+  - "{{.repo}}"
+outputs:
+  pr_url:
+    format: "text"
+    pattern: "(https://github.com/[^/]+/[^/]+/pull/\\d+)"  # Extract URL from plain text output
+schema:
+  type: "object"
+  required: ["title", "body", "repo"]
+  properties:
+    title:
+      type: "string"
+      description: "PR title"
+    body:
+      type: "string"
+      description: "PR description"
+    repo:
+      type: "string"
+      description: "Repository to create PR to."

@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: add-security-md
+type: file
+description: "Add SECURITY.md file to repository"
+template_path: "security.md.tmpl"
+target_path: "SECURITY.md"
+create_dirs: true
+outputs:
+  file_path:
+    format: "text"
+    value: "SECURITY.md"  # Static output
+schema:
+  type: "object"
+  required: ["name", "emails"]
+  properties:
+    name:
+      type: "string"
+      description: "Project name"
+    emails:
+      type: "array"
+      items:
+        type: "string"
+      description: "Security contact emails"

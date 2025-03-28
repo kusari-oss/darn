@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: create-branch
+type: cli
+description: "Create and checkout a new git branch"
+command: "git"
+args:
+  - "checkout"
+  - "-b"
+  - "{{.branch_name}}"
+outputs:
+  branch_name:
+    format: "text"
+    pattern: ".*"  # Just return the branch name as passed in
+schema:
+  type: "object"
+  required: ["branch_name"]
+  properties:
+    branch_name:
+      type: "string"
+      description: "Name of the branch to create"

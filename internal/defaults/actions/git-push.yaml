@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: git-push
+type: cli
+description: "Push branch to remote repository"
+command: "git"
+args:
+  - "push"
+  - "-u"
+  - "origin"
+  - "{{.branch}}"
+schema:
+  type: "object"
+  required: ["branch"]
+  properties:
+    branch:
+      type: "string"
+      description: "Branch name to push"

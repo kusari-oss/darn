@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: git-commit
+type: cli
+description: "Commit staged changes"
+command: "git"
+args:
+  - "commit"
+  - "-m"
+  - "{{.message}}"
+schema:
+  type: "object"
+  required: ["message"]
+  properties:
+    message:
+      type: "string"
+      description: "Commit message"

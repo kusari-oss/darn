@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: git-get-commit-hash
+type: cli
+description: "Get the current commit hash"
+command: "git"
+args:
+  - "rev-parse"
+  - "HEAD"
+outputs:
+  commit_hash:
+    format: "text"
+    pattern: "([0-9a-f]{40})"
