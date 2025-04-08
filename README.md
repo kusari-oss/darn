@@ -6,6 +6,8 @@
 
 Darn is a command-line tool designed to manage and enforce security best practices against projects. It provides a flexible framework for applying security remediation actions through templated files and CLI commands.
 
+**NOTE:** It is considered generally inappropriate to open automated pull requests using tools like Darn and Darnit if you do not own the project or have explicit permission to do so.
+
 Darn and Darnit development is sponsored by Kusari, and is released under the Apache-2.0 License.
 
 ## Installation
