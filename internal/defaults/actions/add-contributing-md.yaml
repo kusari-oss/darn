@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: add-contributing-md
+type: file
+description: "Add CONTRIBUTING.md file to repository"
+template_path: "contributing.md.tmpl"
+target_path: "CONTRIBUTING.md"
+create_dirs: true
+outputs:
+  file_path:
+    format: "text"
+    value: "CONTRIBUTING.md"
+schema:
+  type: "object"
+  required: ["name", "repository"]
+  properties:
+    name:
+      type: "string"
+      description: "Project name"
+    repository:
+      type: "string"
+      description: "Repository name in format organization/repo"

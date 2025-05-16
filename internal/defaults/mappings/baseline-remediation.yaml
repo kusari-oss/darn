@@ -1,0 +1,111 @@
+# SPDX-License-Identifier: Apache-2.0
+
+mappings:
+  - id: "openssf-baseline-remediation"
+    reason: "Apply OpenSSF Baseline security best practices based on Privateer findings"
+    condition: "true" # Base condition always true, but individual steps have specific conditions
+    steps:
+      - id: "create-security-branch"
+        action: "create-branch"
+        parameters:
+          branch_name: "add-security-baseline-docs"
+        reason: "Create branch for security documentation"
+        # Pure CEL conditions to check if any relevant controls have failed
+        condition: "findings.controls.exists(c, c.startsWith('OSPS-VM-04') && findings.has_failed_control[c] == true) || 
+                    findings.controls.exists(c, c.startsWith('OSPS-GV-03') && findings.has_failed_control[c] == true) || 
+                    findings.controls.exists(c, c.startsWith('OSPS-LE-02') && findings.has_failed_control[c] == true) || 
+                    findings.controls.exists(c, c.startsWith('OSPS-DO-01') && findings.has_failed_control[c] == true)"
+
+      # Documentation remediation - Only add if Security Policy is missing (OSPS-VM-04.01)
+      - id: "add-security-docs"
+        action: "add-security-md"
+        parameters:
+          name: "{{.project_name}}"
+          emails: ["{{.security_email}}"]
+        reason: "Add SECURITY.md file (OSPS-VM-04.01)"
+        depends_on: ["create-security-branch"]
+        condition: "findings.failed_controls.exists(c, c == 'OSPS-VM-04.01')"
+      
+      # Governance remediation - Only add if Contribution Guide is missing (OSPS-GV-03.01)
+      - id: "add-contributing-docs"
+        action: "add-contributing-md"
+        parameters:
+          name: "{{.project_name}}"
+          repository: "{{.organization}}/{{.repo_name}}"
+        reason: "Add CONTRIBUTING.md file (OSPS-GV-03.01)"
+        depends_on: ["create-security-branch"]
+        condition: "findings.failed_controls.exists(c, c == 'OSPS-GV-03.01')"
+      
+      # Legal remediation - Only add if License is missing (OSPS-LE-02.01, OSPS-LE-03.01)
+      - id: "add-license"
+        action: "add-license"
+        parameters:
+          name: "{{.project_name}}"
+          license_type: "apache-2.0"
+          year: "2025"
+          copyright_holder: "{{.organization}}"
+        reason: "Add LICENSE file (OSPS-LE-02.01, OSPS-LE-03.01)"
+        depends_on: ["create-security-branch"]
+        condition: "findings.failed_controls.exists(c, c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01')"
+      
+      # User guide - Only add if user guide is missing (OSPS-DO-01.01)
+      - id: "add-user-guide"
+        action: "update-readme-md"
+        parameters:
+          name: "{{.project_name}}"
+          add_user_guide: true
+        reason: "Add user guide documentation (OSPS-DO-01.01)"
+        depends_on: ["create-security-branch"]
+        condition: "findings.failed_controls.exists(c, c == 'OSPS-DO-01.01')"
+      
+      # Commit changes - Only if any of the docs were added
+      - id: "add-files-to-git"
+        action: "git-add"
+        parameters:
+          files: "."
+        depends_on: ["add-security-docs", "add-contributing-docs", "add-license", "add-user-guide"]
+        reason: "Stage security documentation files"
+        condition: "size(findings.failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"
+      
+      - id: "commit-security-docs"
+        action: "git-commit"
+        parameters:
+          message: "Add OpenSSF Baseline security documentation"
+        depends_on: ["add-files-to-git"]
+        reason: "Commit security documentation to branch"
+        condition: "size(findings.failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"
+      
+      - id: "push-security-branch"
+        action: "git-push"
+        parameters:
+          branch: "add-security-baseline-docs"
+        depends_on: ["commit-security-docs"]
+        reason: "Push branch to remote repository"
+        condition: "size(findings.failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"
+      
+      - id: "create-security-pr"
+        action: "create-pr"
+        parameters:
+          title: "Add OpenSSF Baseline security documentation"
+          # Dynamically build PR body based on failed controls
+          body: |
+            This PR adds documentation to comply with the OpenSSF Baseline security controls:
+
+            {{if findings.failed_controls.exists(c, c == 'OSPS-VM-04.01')}}
+            - SECURITY.md file for vulnerability reporting (OSPS-VM-04.01)
+            {{end}}
+            {{if findings.failed_controls.exists(c, c == 'OSPS-GV-03.01')}}
+            - CONTRIBUTING.md guide (OSPS-GV-03.01)
+            {{end}}
+            {{if findings.failed_controls.exists(c, c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01')}}
+            - LICENSE file (OSPS-LE-02.01, OSPS-LE-03.01)
+            {{end}}
+            {{if findings.failed_controls.exists(c, c == 'OSPS-DO-01.01')}}
+            - User guide documentation (OSPS-DO-01.01)
+            {{end}}
+
+            These changes address findings from the Privateer tool report.
+          repo: "{{.organization}}/{{.repo_name}}"
+        depends_on: ["push-security-branch"]
+        reason: "Create PR for security documentation"
+        condition: "size(findings.failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"

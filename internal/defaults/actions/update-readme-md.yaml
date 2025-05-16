@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: update-readme-md
+type: cli
+description: "Update README.md with user guide information"
+command: "bash"
+args:
+  - "-c"
+  - |
+    #!/bin/bash
+    # Check if README.md exists
+    if [ -f "README.md" ]; then
+      # Check if user guide section already exists
+      if grep -q "# User Guide" README.md; then
+        echo "User guide section already exists in README.md"
+      else
+        # Generate user guide content
+        USER_GUIDE=$(cat <<EOF
+
+    ## User Guide
+
+    For detailed usage instructions, please see:
+
+    ### Installation
+
+    \`\`\`bash
+    # Example installation commands
+    git clone https://github.com/example/{{.name}}.git
+    cd {{.name}}
+    make install
+    \`\`\`
+
+    ### Basic Usage
+
+    \`\`\`bash
+    # Example command for basic usage
+    {{.name}} --help
+    \`\`\`
+
+    For more detailed information, please see the full documentation.
+    EOF
+    )
+            # Append user guide to README.md
+            echo "$USER_GUIDE" >> README.md
+            echo "Added user guide section to README.md"
+          fi
+        else
+          # Create a new README.md file with basic project info and user guide
+          cat > README.md <<EOF
+    # {{.name}}
+
+    A brief description of {{.name}}.
+
+    ## User Guide
+
+    ### Installation
+
+    \`\`\`bash
+    # Example installation commands
+    git clone https://github.com/example/{{.name}}.git
+    cd {{.name}}
+    make install
+    \`\`\`
+
+    ### Basic Usage
+
+    \`\`\`bash
+    # Example command for basic usage
+    {{.name}} --help
+    \`\`\`
+
+    For more detailed information, please see the full documentation.
+    EOF
+          echo "Created new README.md with user guide"
+        fi
+schema:
+  type: "object"
+  required: ["name"]
+  properties:
+    name:
+      type: "string"
+      description: "Project name"
+    add_user_guide:
+      type: "boolean"
+      description: "Whether to add user guide section"

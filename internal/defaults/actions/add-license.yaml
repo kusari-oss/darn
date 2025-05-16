@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: add-license
+type: file
+description: "Add LICENSE file to repository"
+template_path: "license/{{.license_type}}.tmpl"
+target_path: "LICENSE"
+create_dirs: true
+outputs:
+  file_path:
+    format: "text"
+    value: "LICENSE"
+schema:
+  type: "object"
+  required: ["license_type", "year", "copyright_holder"]
+  properties:
+    license_type:
+      type: "string"
+      description: "Type of license (e.g., apache-2.0, mit, gpl-3.0)"
+    year:
+      type: "string"
+      description: "Copyright year"
+    copyright_holder:
+      type: "string"
+      description: "Copyright holder name"
+    name:
+      type: "string"
+      description: "Project name"
