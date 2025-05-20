@@ -58,7 +58,10 @@ for applying security remediation actions through templated files and CLI comman
 			cfg = config.NewDefaultConfig()
 		} else {
 			// Load configuration
-			cfg, err = config.LoadConfig(projectDir)
+			// For darn's root command, cmdLineLibraryPath and globalConfigPathOverride are not directly set by top-level flags.
+			// These would be empty strings if LoadConfig is called here directly.
+			// The projectDir argument has been removed from LoadConfig.
+			cfg, err = config.LoadConfig("", "")
 			if err != nil {
 				fmt.Printf("Warning: Error loading configuration: %v\n", err)
 				fmt.Println("Using default configuration instead.")

@@ -174,3 +174,60 @@ func TestCELEvaluatorWithInvalidData(t *testing.T) {
 	})
 	assert.Error(t, err, "Expected error for findings not being a map")
 }
+
+func TestEvaluateStringArrayExpression(t *testing.T) {
+	// Create a new evaluator
+	evaluator, err := condition.NewCELEvaluator()
+	require.NoError(t, err, "Error creating CEL evaluator")
+
+	// Test data
+	data := map[string]interface{}{
+		"findings": map[string]interface{}{
+			"failed_controls": []string{"OSPS-GV-03.01", "OSPS-LE-02.01"},
+			"has_failed_control": map[string]interface{}{
+				"OSPS-GV-03.01": true,
+				"OSPS-LE-02.01": true,
+			},
+		},
+	}
+
+	// Test cases
+	tests := []struct {
+		name       string
+		expression string
+		expected   []string
+		wantErr    bool
+	}{
+		{
+			name:       "simple string array",
+			expression: "['a', 'b', 'c']",
+			expected:   []string{"a", "b", "c"},
+			wantErr:    false,
+		},
+		{
+			name:       "conditional array with filtering",
+			expression: "['base', ...findings.has_failed_control['OSPS-GV-03.01'] ? ['contrib'] : [], ...findings.has_failed_control['OSPS-LE-02.01'] ? ['license'] : []].filter(s, s != '')",
+			expected:   []string{"base", "contrib", "license"},
+			wantErr:    false,
+		},
+		{
+			name:       "invalid expression",
+			expression: "findings.invalid.property",
+			expected:   nil,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := evaluator.EvaluateStringArrayExpression(tt.expression, data)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.ElementsMatch(t, tt.expected, result)
+			}
+		})
+	}
+}

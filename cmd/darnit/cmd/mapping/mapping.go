@@ -39,7 +39,11 @@ func getListCmd() *cobra.Command {
 			}
 
 			// Load configuration
-			cfg, err := config.LoadConfig(workingDir)
+			// For darnit mapping list, cmdLineLibraryPath is not directly applicable from this subcommand's flags.
+			// It would be inherited if darnit was called with --library-path.
+			// globalConfigPathOverride is also not applicable here.
+			// The projectDir argument has been removed from LoadConfig.
+			cfg, err := config.LoadConfig("", "")
 			if err != nil {
 				fmt.Printf("Error loading configuration: %v\n", err)
 				os.Exit(1)

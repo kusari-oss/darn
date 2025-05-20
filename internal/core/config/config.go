@@ -35,10 +35,11 @@ type Config struct {
 	MappingsDir  string `yaml:"mappings_dir"` // New field
 
 	// Library-related configuration
-	LibraryPath string `yaml:"library_path"`
-	UseGlobal   bool   `yaml:"use_global"`
-	UseLocal    bool   `yaml:"use_local"`
-	GlobalFirst bool   `yaml:"global_first"`
+	LibraryPath        string `yaml:"library_path"`
+	CmdLineLibraryPath string `yaml:"-"` // Exclude from YAML marshalling
+	UseGlobal          bool   `yaml:"use_global"`
+	UseLocal           bool   `yaml:"use_local"`
+	GlobalFirst        bool   `yaml:"global_first"`
 }
 
 // State holds the runtime state of darn
@@ -57,10 +58,11 @@ func NewDefaultConfig() *Config {
 		ActionsDir:   "actions",
 		ConfigsDir:   "configs",
 		MappingsDir:  "mappings",
-		LibraryPath:  ExpandPath(DefaultGlobalLibrary),
-		UseGlobal:    true,
-		UseLocal:     false,
-		GlobalFirst:  true,
+		LibraryPath:  ExpandPathWithTilde(DefaultGlobalLibrary),
+		// CmdLineLibraryPath is initialized as an empty string by default
+		UseGlobal:   true,
+		UseLocal:    false,
+		GlobalFirst: true,
 	}
 }
 
@@ -69,15 +71,22 @@ func NewState(projectDir, version string) *State {
 	now := time.Now().Format(time.RFC3339)
 	return &State{
 		ProjectDir:    projectDir,
-		LibraryInUse:  ExpandPath(DefaultGlobalLibrary),
+		LibraryInUse:  ExpandPathWithTilde(DefaultGlobalLibrary),
 		LastUpdated:   now,
 		InitializedAt: now,
 		Version:       version,
 	}
 }
 
-// ExpandPath expands ~ to user home directory
-func ExpandPath(path string) string {
+// ExpandPathWithTilde expands ~ to user home directory
+func ExpandPathWithTilde(path string) string {
+	if path == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return path // Return original if can't expand
+		}
+		return home
+	}
 	if strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -88,31 +97,78 @@ func ExpandPath(path string) string {
 	return path
 }
 
-// LoadConfig loads the application configuration, merging global and project configs
-func LoadConfig(projectDir string) (*Config, error) {
+// GlobalConfigFilePath returns the absolute path to the global darn config file.
+func GlobalConfigFilePath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("could not get user home directory: %w", err)
+	}
+	return filepath.Join(home, DefaultConfigDir, DefaultConfigFileName), nil
+}
+
+// LoadConfig loads the application configuration.
+// It starts with default settings, then attempts to merge settings from a global
+// configuration file. A command-line provided library path will override any
+// library path found in the configuration files.
+// The globalConfigPathOverride parameter allows specifying a custom path for the global
+// config file, primarily for testing or special use cases. If empty, the default
+// global config path (e.g., ~/.darn/config.yaml) is used.
+func LoadConfig(cmdLineLibraryPath string, globalConfigPathOverride string) (*Config, error) {
 	// Start with default configuration
 	config := NewDefaultConfig()
 
+	// Determine global config path
+	var globalConfigPath string
+	var err error
+	if globalConfigPathOverride != "" {
+		globalConfigPath = ExpandPathWithTilde(globalConfigPathOverride)
+	} else {
+		globalConfigPath, err = GlobalConfigFilePath()
+		if err != nil {
+			// Non-fatal, as global config might not be required or might be created later.
+			// Proceed with an empty path, loadConfigFile will handle it.
+			// Or, decide if this should be a fatal error. For now, let's assume it can proceed.
+			fmt.Printf("Warning: could not determine global config path: %v\n", err)
+			globalConfigPath = "" // Explicitly set to empty to avoid using uninitialized path
+		}
+	}
+
 	// Try to load global config
-	globalConfig, err := loadConfigFile(ExpandPath("~/.darn/config.yaml"))
+	globalConfig, err := LoadConfigFile(globalConfigPath)
 	if err == nil {
 		// Merge global config with defaults
 		mergeConfigs(config, globalConfig)
+		// Ensure LibraryPath from global config is expanded if it was set
+		if globalConfig.LibraryPath != "" {
+			config.LibraryPath = ExpandPathWithTilde(globalConfig.LibraryPath)
+		}
+	} else if !os.IsNotExist(err) && globalConfigPath != "" {
+		// Only print a warning if the error is not "file not found"
+		// and a specific globalConfigPath was attempted (not empty).
+		fmt.Printf("Warning: could not load global config file '%s': %v\n", globalConfigPath, err)
 	}
 
-	// Try to load project config
-	projectConfigPath := filepath.Join(projectDir, DefaultConfigDir, DefaultConfigFileName)
-	projectConfig, err := loadConfigFile(projectConfigPath)
-	if err == nil {
-		// Project config overrides global config
-		mergeConfigs(config, projectConfig)
+	// Override with command-line library path if provided
+	if cmdLineLibraryPath != "" {
+		config.LibraryPath = ExpandPathWithTilde(cmdLineLibraryPath)
+		config.CmdLineLibraryPath = ExpandPathWithTilde(cmdLineLibraryPath) // Also store the original cmd line path
 	}
+
+	// Post-condition: config.LibraryPath will be:
+	// 1. The cmdLineLibraryPath (expanded), if provided.
+	// 2. The globalConfig.LibraryPath (expanded), if cmdLine was not provided and global was found and had a path.
+	// 3. The NewDefaultConfig().LibraryPath (expanded), if neither of the above set it.
+	// All paths that are tilde-expanded by ExpandPathWithTilde will be absolute.
+	// Paths that are not tilde-expanded (e.g. already absolute, or relative without tilde) remain as is.
 
 	return config, nil
 }
 
-// loadConfigFile loads a configuration from a specific file path
-func loadConfigFile(path string) (*Config, error) {
+// LoadConfigFile loads a configuration from a specific file path
+func LoadConfigFile(path string) (*Config, error) {
+	if path == "" {
+		return nil, fmt.Errorf("config file path cannot be empty")
+	}
 	// Read the config file
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -141,8 +197,9 @@ func mergeConfigs(target, source *Config) {
 		target.ConfigsDir = source.ConfigsDir
 	}
 	if source.LibraryPath != "" {
-		target.LibraryPath = source.LibraryPath
+		target.LibraryPath = ExpandPathWithTilde(source.LibraryPath)
 	}
+	// CmdLineLibraryPath is not merged here as it's handled in LoadConfig directly.
 	// Boolean fields - only override if they're explicitly set in the source
 	// This isn't perfect since there's no way to tell from the parsed struct if they were omitted,
 	// but it's a reasonable approach for this use case
@@ -151,12 +208,12 @@ func mergeConfigs(target, source *Config) {
 	target.GlobalFirst = source.GlobalFirst
 }
 
-// SaveConfig saves the configuration to the specified directory
+// SaveConfig saves the configuration to the specified directory (typically for project-local configs)
 func SaveConfig(config *Config, dir string) error {
 	// Create config directory if it doesn't exist
 	configDir := filepath.Join(dir, DefaultConfigDir)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("error creating config directory: %w", err)
+		return fmt.Errorf("error creating config directory '%s': %w", configDir, err)
 	}
 
 	// Marshal config to YAML
@@ -168,7 +225,34 @@ func SaveConfig(config *Config, dir string) error {
 	// Write config to file
 	configPath := filepath.Join(configDir, DefaultConfigFileName)
 	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		return fmt.Errorf("error writing config file: %w", err)
+		return fmt.Errorf("error writing config file '%s': %w", configPath, err)
+	}
+
+	return nil
+}
+
+// SaveGlobalConfig saves the provided configuration to the user's global darn config path.
+func SaveGlobalConfig(config *Config) error {
+	globalPath, err := GlobalConfigFilePath()
+	if err != nil {
+		return fmt.Errorf("could not determine global config path for saving: %w", err)
+	}
+
+	// Ensure the directory exists (e.g., ~/.darn/)
+	globalDir := filepath.Dir(globalPath)
+	if err := os.MkdirAll(globalDir, 0755); err != nil {
+		return fmt.Errorf("error creating global config directory '%s': %w", globalDir, err)
+	}
+
+	// Marshal config to YAML
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("error marshaling global config: %w", err)
+	}
+
+	// Write config to file
+	if err := os.WriteFile(globalPath, data, 0644); err != nil {
+		return fmt.Errorf("error writing global config file '%s': %w", globalPath, err)
 	}
 
 	return nil
