@@ -4,7 +4,7 @@
 
 **NOTE:** This demo runs a little fast. I'll try to record it to make it a bit slower another time
 
-Darn is a command-line tool designed to manage and enforce security best practices against projects. It provides a flexible framework for applying security remediation actions through templated files and CLI commands.
+Darn is a command-line tool designed to manage and enforce security best practices against projects. It provides a flexible framework for applying security remediation actions through templated files and CLI commands. `darnit` is its companion tool for orchestrating these actions based on security findings.
 
 **NOTE:** It is considered generally inappropriate to open automated pull requests using tools like Darn and Darnit if you do not own the project or have explicit permission to do so.
 
@@ -29,158 +29,137 @@ go install github.com/kusari-oss/darn/cmd/darnit@latest
 
 ## Quick Start
 
-Initialize a new darn project:
+Initialize a new darn project (this will set up a project-specific library):
 
 ```bash
-# Initialize with default settings
-darn init
-
-# Initialize in a specific directory with custom settings
-darn init my-darn-project --templates-dir=my-templates --actions-dir=my-actions
+mkdir my-security-project
+cd my-security-project
+darn library init . 
+# This creates ./library/ and ./.darn/config.yaml (configured to use ./library/)
+# It also creates ./library/actions, ./library/templates, etc.
 ```
 
-Run an action:
+Now you can use `darnit` within this project. For example, if you have a security report `findings.json` and parameters `params.json`:
 
 ```bash
-# Using a parameters file directly
-darn action run add-security-md configs/params.json
-
-# Using a JSON string after --
-darn action run add-security-md -- {"repo":"my-repo","name":"My Project","emails":["security@example.com"]}
-```
-
-Using darnit:
-
-Assuming there's a `report.json` with content:
-
-```json
-{
-  "repository": "kusari-oss/darn-test-project",
-  "scan_date": "2025-03-14T15:09:26Z",
-  "scan_tool": "security-scanner-v1.0",
-  "findings": {
-    "security_policy": "missing",
-    "code_of_conduct": "present",
-    "mfa_status": "disabled",
-    "branch_protection": "partial",
-    "secrets_scanning": "enabled",
-    "dependency_review": "disabled"
-  },
-  "risk_score": 65
-}
-```
-
-and a `parameters.json` with content (these are test values for a fake project):
-
-```json
-{
-  "project_name": "Darn Test Project",
-  "organization": "kusari-oss",
-  "repo_name": "darn-test-project",
-  "security_contacts": ["security@example.com", "admin@example.com"]
-}
-```
-
-```bash
-darnit plan generate -m ~/.darn/library/mappings/security-remediation.yaml report.json --params params.json -o plan.json -v
-```
-
-This will generate a `plan.json` that should look like:
-
-```json
-{
-  "project_name": "Darn Security Tool",
-  "repository": "kusari-oss/darn",
-  "steps": [
-    {
-      "id": "security-policy-remediation",
-      "action_name": "create-branch",
-      "params": {
-        "branch_name": "add-security-docs"
-      },
-      "reason": "Create branch for security documentation"
-    },
-    {
-      "id": "add-security-docs",
-      "action_name": "add-security-md",
-      "params": {
-        "name": "Darn Security Tool",
-        "emails": ["security@example.com", "admin@example.com"]
-      },
-      "reason": "Add SECURITY.md file",
-      "depends_on": ["security-policy-remediation"]
-    },
-    {
-      "id": "org-security-remediation",
-      "action_name": "enable-mfa",
-      "params": {
-        "organization": "kusari-oss"
-      },
-      "reason": "Enable MFA requirement for the organization"
-    }
-    // Additional steps omitted for brevity
-  ]
-}
-```
-
-You can then execute the plan, assuming you have tools that are required, e.g. `git` and the github cli, `gh`:
-
-```bash
+# Assuming findings.json and params.json are present
+# darnit will use the actions and templates from ./library/
+darnit plan generate -m ./library/mappings/security-remediation.yaml findings.json --params params.json -o plan.json -v
 darnit plan execute plan.json -v
 ```
 
+## Configuration
+
+Darn's configuration, especially concerning library paths for actions and templates, is flexible. For a detailed explanation of the configuration hierarchy, how `darnit --library-path` works, and how `darn library init` sets up project-specific libraries, please see the **[Darn Configuration Management documentation](./docs/CONFIGURATION.md)**.
+
+A brief overview of the key configuration files:
+
+*   **Project Configuration (`<project_dir>/.darn/config.yaml`):**
+    Created by `darn library init .` in your project directory (`<project_dir>`). It typically configures Darn/Darnit to use a local library within that project (e.g., `<project_dir>/library/`).
+    Example (`my-project/.darn/config.yaml`):
+    ```yaml
+    library_path: library  # Path relative to my-project/
+    use_local: true
+    use_global: false
+    templates_dir: templates # Relative to library_path (i.e., my-project/library/templates)
+    actions_dir: actions     # Relative to library_path (i.e., my-project/library/actions)
+    # ... and so on for configs_dir, mappings_dir
+    ```
+
+*   **Global Configuration (`~/.darn/config.yaml`):**
+    Used if Darn/Darnit is run outside a project or if the project doesn't have its own overriding configuration. Can be used to specify a default global library.
+
+*   **`darnit --library-path <path>` flag:**
+    This command-line flag for `darnit` overrides all other library configurations for that specific execution.
+    Example: `darnit plan generate ... --library-path /path/to/another-library`
+
 ## Core Concepts
 
-- **Actions**: Reusable operations that implement security best practices
-- **Templates**: Template files used by file actions
-- **Parameters**: Values passed to actions (in JSON or YAML format)
+- **Actions**: Reusable operations (defined in YAML) that implement security best practices (e.g., creating a file, running a CLI command).
+- **Templates**: Go template files used by "file" type actions.
+- **Parameters**: Values passed to actions (in JSON or YAML format) to customize their behavior.
+- **Mappings**: YAML files that link security findings (conditions) to specific remediation actions and their parameters.
+- **Plans**: A sequence of action steps generated by `darnit plan generate` based on findings and mappings. These plans can then be executed.
+- **Library**: A collection of actions, templates, default configurations, and mappings. Can be project-local or global.
 
 ## Command Reference
 
-### Initialization
+### `darn library`: Manage Libraries
+
+The `darn library` subcommand is used to manage libraries of actions, templates, and other shared resources.
+
+**`darn library init [directory] [flags]`**
+
+Initializes a Darn project in the specified `[directory]` (or the current directory if omitted).
+This command sets up a project-specific, self-contained library.
+
+Key outcomes:
+- Creates a `library/` subdirectory within `[directory]` (e.g., `[directory]/library/`).
+- Populates `library/` with standard subdirectories like `actions/`, `templates/`, `configs/`, and `mappings/`, filled with default content.
+- Creates a `.darn/config.yaml` file inside `[directory]` (e.g., `[directory]/.darn/config.yaml`). This file configures the project to use its local `library/` by setting `library_path: library` (relative to the project) and `use_local: true`.
+
+Flags for `darn library init`:
+- `--templates-dir <name>`: Name of the templates directory within the local library (default: "templates").
+- `--actions-dir <name>`: Name of the actions directory within the local library (default: "actions").
+- `--configs-dir <name>`: Name of the configs directory within the local library (default: "configs").
+- `--mappings-dir <name>`: Name of the mappings directory within the local library (default: "mappings").
+- `--global-config-path <path>`: If the `darn library init` command itself needs to consult a global configuration during its operation (e.g., for advanced default fetching logic), this flag specifies the path to that global `config.yaml`. This does **not** make the initialized project use this global config for its day-to-day operations; the project will still be configured to use its own local `library/`.
+- `--local-only`: Use only embedded defaults when populating the local library; do not attempt to fetch the latest defaults from a remote source.
+- `--remote-url <url>`: URL for the remote repository from which to fetch default library content.
+- `--verbose`: Enable verbose output during initialization.
+
+**`darn library update [source-directory] [flags]`**
+
+Updates an existing Darn library (either the default global library or one specified by `--library-path`) with new or modified files from `[source-directory]` (or the current directory if omitted).
+
+Flags for `darn library update`:
+- `--library-path <path>`: Path to the Darn library that you want to update. Defaults to `~/.darn/library` (the default global library).
+- `--force`: Force update, overwriting files even if they appear identical or newer in the target library.
+- `--dry-run`: Show what changes would be made without actually modifying any files.
+- `--verbose`: Enable verbose output during the update process.
+
+---
+
+### `darn action`: Work with Actions
 
 ```bash
-darn init [directory] [flags]
-```
-
-**Flags:**
-
-- `--templates-dir`: Directory for template files (default: "templates")
-- `--actions-dir`: Directory for action files (default: "actions")
-- `--configs-dir`: Directory for configuration files (default: "configs")
-- `--local-only`: Use only embedded defaults, don't attempt to fetch latest from remote
-- `--remote-url`: URL for remote defaults repository
-
-### Actions
-
-```bash
-# List available actions
+# List available actions (from the configured library)
 darn action list
 
 # Get detailed information about a specific action
 darn action info [action-name]
 
-# Run a specific action with parameters file
-darn action run [action-name] [params-file]
+# Run a specific action with parameters from a file
+darn action run [action-name] [params-file.json]
 
-# Run a specific action with JSON string
-darn action run [action-name] -- [json-string]
+# Run a specific action with parameters as a JSON string
+darn action run [action-name] -- '{"key": "value"}'
 ```
 
-### Darn Configuration
+---
 
+### `darnit plan`: Generate and Execute Remediation Plans
+
+**`darnit plan generate -m <mapping.yaml> <findings.json> --params <parameters.json> -o <output-plan.json>`**
+Generates a remediation plan based on security findings, mappings, and parameters.
+
+**`darnit plan execute <plan.json>`**
+Executes the steps defined in a generated plan.
+
+(For more `darnit` subcommands like `parameters` and `mapping`, refer to `darnit --help`)
+
+---
+### Deprecated `darn init`
+
+The top-level `darn init` command is deprecated. Please use `darn library init` instead.
+If you run `darn init`, it will forward the command and its flags to `darn library init`.
+
+---
+### Defaults (`darn defaults`)
+
+The `darn defaults` subcommands manage the embedded default library content.
 ```bash
-# Display current configuration
-darn config show
-
-# Create a new config file
-darn config init
-```
-
-### Defaults
-
-```bash
-# Update defaults from remote source
+# Update defaults from remote source (typically for the global library)
 darn defaults update
 
 # List embedded default files
@@ -193,41 +172,21 @@ Darn supports the following action types:
 
 ### File Actions
 
-File actions create or modify files using templates:
+File actions create or modify files using Go templates:
 
 ```yaml
 name: add-security-md
 type: file
 description: "Add SECURITY.md file to repository"
-template_path: "security.md.tmpl"
-target_path: "{{.repo}}/SECURITY.md"
-create_dirs: true
-schema: {
-  "type": "object",
-  "required": ["repo", "name", "emails"],
-  "properties": {
-    "repo": {
-      "type": "string",
-      "description": "Repository name"
-    },
-    "name": {
-      "type": "string",
-      "description": "Project name"
-    },
-    "emails": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Security contact emails"
-    }
-  }
-}
+template_path: "security.md.tmpl" # Relative to the library's templates directory
+target_path: "{{.repo}}/SECURITY.md" # Path where the file will be written
+create_dirs: true # Whether to create parent directories for target_path
+schema: { # JSON schema for validating parameters }
 ```
 
 ### CLI Actions
 
-CLI actions execute command-line tools (like GitHub CLI):
+CLI actions execute command-line tools:
 
 ```yaml
 name: enable-mfa
@@ -239,79 +198,14 @@ args:
   - "orgs/{{.organization}}"
   - "--jq"
   - ".two_factor_requirement_enabled"
-schema: {
-  "type": "object",
-  "required": ["organization"],
-  "properties": {
-    "organization": {
-      "type": "string",
-      "description": "GitHub organization name"
-    }
-  }
-}
-```
-
-### Git Actions
-
-Darn includes CLI actions for Git operations:
-
-```yaml
-# Simple action to stage and commit changes
-name: git-commit
-type: cli
-description: "Stage and commit changes to files"
-command: "git"
-args:
-  - "add"
-  - "{{.files}}"
-  - "&&"
-  - "git"
-  - "commit"
-  - "-m"
-  - "{{.message}}"
-schema: {
-  "type": "object",
-  "required": ["files", "message"],
-  "properties": {
-    "files": {
-      "type": "string",
-      "description": "Files to stage (space-separated list or glob pattern)"
-    },
-    "message": {
-      "type": "string",
-      "description": "Commit message"
-    }
-  }
-}
-```
-
-Example usage:
-
-```bash
-# Using a parameters file
-darn action run git-commit configs/commit-params.json
-
-# Using inline JSON parameters
-darn action run git-commit -- {"files": "README.md SECURITY.md", "message": "Add security documentation"}
-
-# Stage and commit all changes with inline parameters
-darn action run git-commit -- {"files": ".", "message": "Update all security settings"}
+schema: { # JSON schema for parameters }
 ```
 
 ## Creating Custom Actions
 
-1. Create a new YAML file in your actions directory
-2. Define the action type, parameters schema, and other properties
-3. For file actions, create the corresponding template file
-
-## Configuration
-
-Darn uses a YAML configuration file that can be specified with the `--config` flag:
-
-```yaml
-templates_dir: "templates"
-actions_dir: "actions"
-```
+1.  In your library's `actions/` directory, create a new YAML file (e.g., `my-custom-action.yaml`).
+2.  Define the action `type`, `description`, parameters `schema`, and other properties (like `command` and `args` for CLI actions, or `template_path` and `target_path` for file actions).
+3.  If it's a "file" action, create the corresponding template file in your library's `templates/` directory.
 
 ## Contributing
 

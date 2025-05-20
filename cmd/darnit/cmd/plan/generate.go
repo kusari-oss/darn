@@ -40,7 +40,11 @@ func getGenerateCmd() *cobra.Command {
 			}
 
 			// Load configuration to get library path
-			cfg, err := config.LoadConfig(workingDir)
+			// For darnit plan generate, cmdLineLibraryPath is implicitly handled by LoadConfig if rootCmd's PersistentPreRunE
+			// has already loaded a config influenced by the --library-path flag.
+			// globalConfigPathOverride is also not directly applicable from this subcommand's flags.
+			// The projectDir argument has been removed from LoadConfig.
+			cfg, err := config.LoadConfig("", "")
 			if err != nil {
 				fmt.Printf("Error loading configuration: %v\n", err)
 				os.Exit(1)

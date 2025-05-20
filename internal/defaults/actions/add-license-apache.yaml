@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
-name: add-license
+name: add-license-apache
 type: file
 description: "Add LICENSE file to repository"
-template_path: "license/{{.license_type}}.tmpl"
+template_path: "license/apache-2.0.tmpl"
 target_path: "LICENSE"
 create_dirs: true
 outputs:

@@ -103,7 +103,13 @@ func CreateActionResolver(workingDir string) (*action.Factory, *resolver.Resolve
 	}
 
 	// Load configuration
-	cfg, err := config.LoadConfig(workingDir)
+	// For darnit's CreateActionResolver, cmdLineLibraryPath is implicitly handled by LoadConfig if rootCmd's PersistentPreRunE
+	// has already loaded a config influenced by the --library-path flag.
+	// If this function is called independently, or before such a flag-aware LoadConfig has populated a shared/global config instance,
+	// then cmdLineLibraryPath would typically be empty here.
+	// globalConfigPathOverride is also not directly exposed here.
+	// The projectDir argument has been removed from LoadConfig.
+	cfg, err := config.LoadConfig("", "") // Assuming no direct override at this specific function call
 	if err != nil {
 		return nil, nil, fmt.Errorf("error loading configuration: %w", err)
 	}

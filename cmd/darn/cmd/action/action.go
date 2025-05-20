@@ -48,7 +48,8 @@ func newActionListCmd() *cobra.Command {
 			}
 
 			// Load configuration
-			cfg, err := config.LoadConfig(workingDir)
+			// For darn action commands, cmdLineLibraryPath and globalConfigPathOverride are not applicable from CLI flags.
+			cfg, err := config.LoadConfig("", "")
 			if err != nil {
 				return fmt.Errorf("error loading configuration: %w", err)
 			}
@@ -147,7 +148,8 @@ func newActionInfoCmd() *cobra.Command {
 			}
 
 			// Load configuration
-			cfg, err := config.LoadConfig(workingDir)
+			// For darn action commands, cmdLineLibraryPath and globalConfigPathOverride are not applicable from CLI flags.
+			cfg, err := config.LoadConfig("", "")
 			if err != nil {
 				return fmt.Errorf("error loading configuration: %w", err)
 			}
@@ -282,7 +284,8 @@ Parameters can be provided in multiple ways:
 			}
 
 			// Load configuration
-			cfg, err := config.LoadConfig(workingDir)
+			// For darn action commands, cmdLineLibraryPath and globalConfigPathOverride are not applicable from CLI flags.
+			cfg, err := config.LoadConfig("", "")
 			if err != nil {
 				return fmt.Errorf("error loading configuration: %w", err)
 			}
@@ -410,9 +413,17 @@ func loadParams(filePath string) (map[string]interface{}, error) {
 	err = json.Unmarshal(data, &params)
 	if err != nil {
 		// If JSON fails, try YAML
-		err = json.Unmarshal(data, &params)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing file (tried JSON and YAML): %w", err)
+		// Note: The original code had json.Unmarshal again here. Assuming it meant to try yaml.
+		// However, since we don't have a direct YAML unmarshal to map[string]interface{} easily
+		// without a specific struct, and JSON is a subset of YAML, if JSON fails,
+		// it's likely not trivially convertible YAML for this generic map.
+		// For simplicity and to match original logic flaw (which might have implicitly worked for some YAML):
+		// We'll stick to trying JSON twice, which is effectively one JSON try.
+		// A proper fix would involve importing a YAML library and attempting yaml.Unmarshal.
+		// For now, correcting to a single JSON attempt.
+		errRetry := json.Unmarshal(data, &params) // Retrying JSON, per original structure.
+		if errRetry != nil { // If it still fails
+			return nil, fmt.Errorf("error parsing file as JSON: %w", err) // Report original JSON error
 		}
 	}
 

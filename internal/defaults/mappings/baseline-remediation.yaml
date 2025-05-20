@@ -37,8 +37,8 @@ mappings:
         condition: "findings.failed_controls.exists(c, c == 'OSPS-GV-03.01')"
       
       # Legal remediation - Only add if License is missing (OSPS-LE-02.01, OSPS-LE-03.01)
-      - id: "add-license"
-        action: "add-license"
+      - id: "add-license-apache"
+        action: "add-license-apache"
         parameters:
           name: "{{.project_name}}"
           license_type: "apache-2.0"
@@ -57,16 +57,23 @@ mappings:
         reason: "Add user guide documentation (OSPS-DO-01.01)"
         depends_on: ["create-security-branch"]
         condition: "findings.failed_controls.exists(c, c == 'OSPS-DO-01.01')"
-      
+        
       # Commit changes - Only if any of the docs were added
       - id: "add-files-to-git"
         action: "git-add"
         parameters:
           files: "."
-        depends_on: ["add-security-docs", "add-contributing-docs", "add-license", "add-user-guide"]
+        depends_on_expr: |
+          [
+            'create-security-branch'
+          ] + 
+          ('OSPS-GV-03.01' in findings.has_failed_control ? ['add-contributing-docs'] : []) +
+          (('OSPS-LE-02.01' in findings.has_failed_control || 'OSPS-LE-03.01' in findings.has_failed_control) ? ['add-license-apache'] : []) +
+          ('OSPS-DO-01.01' in findings.has_failed_control ? ['add-user-guide'] : []) +
+          ('OSPS-VM-04.01' in findings.has_failed_control ? ['add-security-docs'] : [])
         reason: "Stage security documentation files"
         condition: "size(findings.failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"
-      
+        
       - id: "commit-security-docs"
         action: "git-commit"
         parameters:

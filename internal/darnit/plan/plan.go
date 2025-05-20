@@ -21,16 +21,17 @@ var paramRegex = regexp.MustCompile(`\{\{\.([^}]+)\}\}`)
 
 // MappingRule defines a rule for mapping a finding to an action or other mapping.
 type MappingRule struct {
-	ID         string                 `yaml:"id"`
-	Condition  string                 `yaml:"condition"`             // CEL expression
-	MappingRef string                 `yaml:"mapping_ref,omitempty"` // New field for allowing submappings
-	Action     string                 `yaml:"action,omitempty"`      // Make optional
-	Reason     string                 `yaml:"reason"`
-	Labels     map[string][]string    `yaml:"labels,omitempty"`
-	Parameters map[string]interface{} `yaml:"parameters,omitempty"`
-	DependsOn  []string               `yaml:"depends_on,omitempty"`
-	Once       bool                   `yaml:"once,omitempty"`
-	Steps      []MappingRule          `yaml:"steps,omitempty"` // New field for sub-steps
+	ID            string                 `yaml:"id"`
+	Condition     string                 `yaml:"condition"`
+	MappingRef    string                 `yaml:"mapping_ref,omitempty"`
+	Action        string                 `yaml:"action,omitempty"`
+	Reason        string                 `yaml:"reason"`
+	Labels        map[string][]string    `yaml:"labels,omitempty"`
+	Parameters    map[string]interface{} `yaml:"parameters,omitempty"`
+	DependsOn     []string               `yaml:"depends_on,omitempty"`
+	DependsOnExpr string                 `yaml:"depends_on_expr,omitempty"` // New field
+	Once          bool                   `yaml:"once,omitempty"`
+	Steps         []MappingRule          `yaml:"steps,omitempty"`
 }
 
 // MappingConfig contains all mapping rules
@@ -237,7 +238,7 @@ func ProcessMappingRule(rule MappingRule, plan *models.RemediationPlan,
 		return nil
 	}
 
-	// This is a regular action step, process it
+	// If this is a regular action step, process it
 	if rule.Action == "" {
 		return fmt.Errorf("rule '%s' has no action, steps, or mapping reference", rule.ID)
 	}
@@ -262,13 +263,52 @@ func ProcessMappingRule(rule MappingRule, plan *models.RemediationPlan,
 		return fmt.Errorf("error processing parameters for rule %s: %w", rule.ID, err)
 	}
 
+	// Process dynamic dependencies if depends_on_expr is provided
+	dependsOn := rule.DependsOn
+	if rule.DependsOnExpr != "" {
+		// Create evaluator
+		evaluator, err := condition.NewCELEvaluator()
+		if err != nil {
+			return fmt.Errorf("error creating CEL evaluator for dynamic dependencies: %w", err)
+		}
+
+		// Evaluate the expression
+		dynamicDeps, err := evaluator.EvaluateStringArrayExpression(rule.DependsOnExpr, combinedData)
+		if err != nil {
+			return fmt.Errorf("error evaluating depends_on_expr for rule %s: %w", rule.ID, err)
+		}
+
+		// Merge static and dynamic dependencies (if both are provided)
+		if dependsOn == nil {
+			dependsOn = dynamicDeps
+		} else {
+			// Add dynamic dependencies that aren't already in the static list
+			for _, dynDep := range dynamicDeps {
+				found := false
+				for _, staticDep := range dependsOn {
+					if staticDep == dynDep {
+						found = true
+						break
+					}
+				}
+				if !found {
+					dependsOn = append(dependsOn, dynDep)
+				}
+			}
+		}
+
+		if options.VerboseLogging {
+			fmt.Printf("Evaluated dynamic dependencies for rule %s: %v\n", rule.ID, dynamicDeps)
+		}
+	}
+
 	// Add the step to the plan
 	plan.Steps = append(plan.Steps, models.RemediationStep{
 		ID:         rule.ID,
 		ActionName: rule.Action,
 		Params:     processedParams,
 		Reason:     rule.Reason,
-		DependsOn:  rule.DependsOn,
+		DependsOn:  dependsOn,
 	})
 
 	// Mark this action as added (for "once: true" handling)
