@@ -11,6 +11,7 @@ import (
 
 	"github.com/kusari-oss/darn/internal/core/action"
 	"github.com/kusari-oss/darn/internal/core/config"
+	"github.com/kusari-oss/darn/internal/core/format"
 	"github.com/kusari-oss/darn/internal/core/schema"
 	. "github.com/kusari-oss/darn/internal/darn/resolver"
 	"github.com/spf13/cobra"
@@ -400,32 +401,11 @@ Parameters can be provided in multiple ways:
 	return runCmd
 }
 
-// loadParams loads parameters from a file (YAML or JSON)
+// loadParams loads parameters from a file (supports both YAML and JSON)
 func loadParams(filePath string) (map[string]interface{}, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading file: %w", err)
-	}
-
 	var params map[string]interface{}
-
-	// Try JSON first
-	err = json.Unmarshal(data, &params)
-	if err != nil {
-		// If JSON fails, try YAML
-		// Note: The original code had json.Unmarshal again here. Assuming it meant to try yaml.
-		// However, since we don't have a direct YAML unmarshal to map[string]interface{} easily
-		// without a specific struct, and JSON is a subset of YAML, if JSON fails,
-		// it's likely not trivially convertible YAML for this generic map.
-		// For simplicity and to match original logic flaw (which might have implicitly worked for some YAML):
-		// We'll stick to trying JSON twice, which is effectively one JSON try.
-		// A proper fix would involve importing a YAML library and attempting yaml.Unmarshal.
-		// For now, correcting to a single JSON attempt.
-		errRetry := json.Unmarshal(data, &params) // Retrying JSON, per original structure.
-		if errRetry != nil { // If it still fails
-			return nil, fmt.Errorf("error parsing file as JSON: %w", err) // Report original JSON error
-		}
+	if err := format.ParseFile(filePath, &params); err != nil {
+		return nil, fmt.Errorf("error parsing parameter file: %w", err)
 	}
-
 	return params, nil
 }

@@ -205,8 +205,8 @@ func TestEvaluateStringArrayExpression(t *testing.T) {
 			wantErr:    false,
 		},
 		{
-			name:       "conditional array with filtering",
-			expression: "['base', ...findings.has_failed_control['OSPS-GV-03.01'] ? ['contrib'] : [], ...findings.has_failed_control['OSPS-LE-02.01'] ? ['license'] : []].filter(s, s != '')",
+			name:       "conditional array with concatenation",
+			expression: "['base'] + (findings.has_failed_control['OSPS-GV-03.01'] ? ['contrib'] : []) + (findings.has_failed_control['OSPS-LE-02.01'] ? ['license'] : [])",
 			expected:   []string{"base", "contrib", "license"},
 			wantErr:    false,
 		},
@@ -215,6 +215,24 @@ func TestEvaluateStringArrayExpression(t *testing.T) {
 			expression: "findings.invalid.property",
 			expected:   nil,
 			wantErr:    true,
+		},
+		{
+			name:       "single string to array",
+			expression: "'single'",
+			expected:   []string{"single"},
+			wantErr:    false,
+		},
+		{
+			name:       "empty array",
+			expression: "[]",
+			expected:   []string{},
+			wantErr:    false,
+		},
+		{
+			name:       "array with mixed conditional",
+			expression: "findings.has_failed_control['OSPS-GV-03.01'] ? ['control-found'] : ['no-control']",
+			expected:   []string{"control-found"},
+			wantErr:    false,
 		},
 	}
 

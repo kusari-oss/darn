@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/kusari-oss/darn/internal/core/config"
+	"github.com/kusari-oss/darn/internal/core/format"
 	"github.com/kusari-oss/darn/internal/darnit"
 	. "github.com/kusari-oss/darn/internal/darnit/plan"
 	"github.com/spf13/cobra"
@@ -33,7 +34,7 @@ func getGenerateCmd() *cobra.Command {
 			verbose, _ := cmd.Flags().GetBool("verbose")
 
 			// Get working directory
-			workingDir, err := os.Getwd()
+			_, err := os.Getwd()
 			if err != nil {
 				fmt.Printf("Error getting working directory: %v\n", err)
 				os.Exit(1)
@@ -96,21 +97,21 @@ func getGenerateCmd() *cobra.Command {
 			}
 
 			// Output the plan
-			planJSON, err := json.MarshalIndent(plan, "", "  ")
-			if err != nil {
-				fmt.Printf("Error formatting plan: %v\n", err)
-				os.Exit(1)
-			}
-
-			// Print to stdout if no output file is specified
 			if outputFile == "" {
-				fmt.Println(string(planJSON))
+				// Print to stdout - default to YAML for better readability
+				planOutput, err := format.FormatData(plan, true) // true = YAML
+				if err != nil {
+					fmt.Printf("Error formatting plan: %v\n", err)
+					os.Exit(1)
+				}
+				fmt.Print(planOutput)
 			} else {
-				// Save to file
+				// Save to file using format based on extension
 				if verbose {
 					fmt.Printf("Saving remediation plan to: %s\n", outputFile)
 				}
-				if err := os.WriteFile(outputFile, planJSON, 0644); err != nil {
+				err = format.WriteFile(outputFile, plan)
+				if err != nil {
 					fmt.Printf("Error writing output file: %v\n", err)
 					os.Exit(1)
 				}

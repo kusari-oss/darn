@@ -142,6 +142,18 @@ func (e *CELEvaluator) EvaluateStringArrayExpression(expression string, data map
 		// Single string - return as one-element array
 		return []string{v}, nil
 	default:
+		// Handle CEL-specific list types ([]ref.Val)
+		if list, ok := val.([]ref.Val); ok {
+			strArray := make([]string, 0, len(list))
+			for _, item := range list {
+				if str, ok := item.Value().(string); ok {
+					strArray = append(strArray, str)
+				} else {
+					strArray = append(strArray, fmt.Sprintf("%v", item.Value()))
+				}
+			}
+			return strArray, nil
+		}
 		return nil, fmt.Errorf("expression did not evaluate to a string array or string, got: %T", val)
 	}
 }

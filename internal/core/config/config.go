@@ -79,17 +79,18 @@ func NewState(projectDir, version string) *State {
 }
 
 // ExpandPathWithTilde expands ~ to user home directory
+// It respects the DARN_HOME environment variable for testing purposes.
 func ExpandPathWithTilde(path string) string {
 	if path == "~" {
-		home, err := os.UserHomeDir()
-		if err != nil {
+		home := getHomeDir()
+		if home == "" {
 			return path // Return original if can't expand
 		}
 		return home
 	}
 	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
+		home := getHomeDir()
+		if home == "" {
 			return path // Return original if can't expand
 		}
 		return filepath.Join(home, path[2:])
@@ -97,12 +98,36 @@ func ExpandPathWithTilde(path string) string {
 	return path
 }
 
-// GlobalConfigFilePath returns the absolute path to the global darn config file.
-func GlobalConfigFilePath() (string, error) {
+// getHomeDir returns the home directory, respecting DARN_HOME for testing
+func getHomeDir() string {
+	// Check for test override first
+	if darnHome := os.Getenv("DARN_HOME"); darnHome != "" {
+		return darnHome
+	}
+	
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("could not get user home directory: %w", err)
+		return "" // Return empty if can't determine
 	}
+	return home
+}
+
+// GlobalConfigFilePath returns the absolute path to the global darn config file.
+// It respects the DARN_HOME environment variable for testing purposes.
+func GlobalConfigFilePath() (string, error) {
+	var home string
+	
+	// Check for test override first
+	if darnHome := os.Getenv("DARN_HOME"); darnHome != "" {
+		home = darnHome
+	} else {
+		var err error
+		home, err = os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("could not get user home directory: %w", err)
+		}
+	}
+	
 	return filepath.Join(home, DefaultConfigDir, DefaultConfigFileName), nil
 }
 

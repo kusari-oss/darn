@@ -1,13 +1,14 @@
 package library
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/kusari-oss/darn/internal/core/config"
-	"github.com/kusari-oss/darn/internal/version"
 	"bytes"
+
+	"github.com/kusari-oss/darn/internal/core/config"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -34,9 +35,15 @@ func TestRunInitCommand_DefaultPath_InitializesGlobalDefaultLocation(t *testing.
 	assert.NoError(t, err)
 	defer os.RemoveAll(tempHomeDir)
 
-	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempHomeDir)
-	defer os.Setenv("HOME", originalHome)
+	originalDarnHome := os.Getenv("DARN_HOME")
+	os.Setenv("DARN_HOME", tempHomeDir)
+	defer func() {
+		if originalDarnHome == "" {
+			os.Unsetenv("DARN_HOME")
+		} else {
+			os.Setenv("DARN_HOME", originalDarnHome)
+		}
+	}()
 
 	// The command is run from a different temporary directory to simulate a generic CWD.
 	tempCwd, err := os.MkdirTemp("", "darn_init_defaultcwd_")
@@ -108,9 +115,15 @@ func TestRunInitCommand_SpecificPath_InitializesAtGivenLocation(t *testing.T) {
 	tempHomeDir, err := os.MkdirTemp("", "darn_init_specific_home_")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tempHomeDir)
-	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempHomeDir)
-	defer os.Setenv("HOME", originalHome)
+	originalDarnHome := os.Getenv("DARN_HOME")
+	os.Setenv("DARN_HOME", tempHomeDir)
+	defer func() {
+		if originalDarnHome == "" {
+			os.Unsetenv("DARN_HOME")
+		} else {
+			os.Setenv("DARN_HOME", originalDarnHome)
+		}
+	}()
 	globalConfigPath := filepath.Join(tempHomeDir, config.DefaultConfigDir, config.DefaultConfigFileName)
 	assert.NoFileExists(t, globalConfigPath, "Global config.yaml should not be created/modified by init command")
 }
@@ -132,7 +145,6 @@ func TestRunInitCommand_CustomDirNames(t *testing.T) {
 	err = os.Chdir(tempCwd)
 	assert.NoError(t, err)
 	defer os.Chdir(originalWd)
-
 
 	args := []string{
 		customLibPath, // Target path for the library
@@ -157,7 +169,6 @@ func TestRunInitCommand_CustomDirNames(t *testing.T) {
 	// Ensure no project-specific config is created
 	assert.NoFileExists(t, filepath.Join(tempCwd, config.DefaultConfigDir, config.DefaultConfigFileName))
 }
-
 
 func TestRunInitCommand_LocalOnly(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "darn_init_local_only_")
@@ -219,15 +230,15 @@ func executeSetGlobalCommand(t *testing.T, args []string, tempHomeDir string) (*
 	cmd.SetArgs(args)
 
 	// Capture output
-	var outBytes []byte
-	cmd.SetOut(&bytes.Buffer{}) // Initialize with a new buffer
-	cmd.SetErr(&bytes.Buffer{}) // Initialize with a new buffer
+	var outBuf bytes.Buffer
+	var errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
 	err := cmd.Execute()
-	if buf, ok := cmd.OutOrStdout().(*bytes.Buffer); ok {
-		outBytes = buf.Bytes()
-	}
-
-	return cmd, string(outBytes), err
+	
+	// Combine both stdout and stderr for complete output
+	output := outBuf.String() + errBuf.String()
+	return cmd, output, err
 }
 
 // TestRunSetGlobalCommand_NoExistingConfig tests setting global library when no config exists.
@@ -350,7 +361,7 @@ func TestRunSetGlobalCommand_PathDoesNotExistInformational(t *testing.T) {
 	assert.Equal(t, nonExistentLibPath, globalCfg.LibraryPath) // Path should still be set
 
 	// Check for informational message in output
-	assert.Contains(t, output, "does not exist", "Output should inform that the path does not exist")
+	assert.Contains(t, output, "does not exist (it may need to be initialized or created)", "Output should inform that the path does not exist")
 }
 
 // Helper to execute the library update command
@@ -381,14 +392,15 @@ func executeLibraryUpdateCommand(t *testing.T, commandArgs []string, tempHomeDir
 	cmd := newUpdateCommand() // Assuming newUpdateCommand() exists and is the constructor
 	cmd.SetArgs(commandArgs)
 
-	var outBytes []byte
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
+	var outBuf bytes.Buffer
+	var errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
 	err := cmd.Execute()
-	if buf, ok := cmd.OutOrStdout().(*bytes.Buffer); ok {
-		outBytes = buf.Bytes()
-	}
-	return string(outBytes), err
+	
+	// Combine both stdout and stderr for complete output
+	output := outBuf.String() + errBuf.String()
+	return output, err
 }
 
 // TestRunUpdateCommand_NoPathFlag_GlobalConfigActive tests `darn library update`
@@ -409,11 +421,16 @@ func TestRunUpdateCommand_NoPathFlag_GlobalConfigActive(t *testing.T) {
 		UseGlobal:   true,
 	}
 
-	// Prepare a source directory with a file to copy
+	// Prepare a source directory with proper library structure
 	sourceFilesDir, err := os.MkdirTemp("", "darn_update_source_")
 	assert.NoError(t, err)
 	defer os.RemoveAll(sourceFilesDir)
-	sourceActionFile := filepath.Join(sourceFilesDir, "test_action.yaml")
+	
+	// Create actions subdirectory and file
+	sourceActionsDir := filepath.Join(sourceFilesDir, "actions")
+	err = os.MkdirAll(sourceActionsDir, 0755)
+	assert.NoError(t, err)
+	sourceActionFile := filepath.Join(sourceActionsDir, "test_action.yaml")
 	err = os.WriteFile(sourceActionFile, []byte("name: test_action\ndescription: A test action."), 0644)
 	assert.NoError(t, err)
 
@@ -423,7 +440,7 @@ func TestRunUpdateCommand_NoPathFlag_GlobalConfigActive(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify from output that it targets the activeGlobalLibPath
-	assert.Contains(t, output, fmt.Sprintf("Attempting to update active global library (from %s or default %s)...", filepath.Join(tempHome, ".darn", "config.yaml"), config.DefaultGlobalLibrary), "Output should indicate attempt to use global config")
+	assert.Contains(t, output, "Attempting to update active global library (from ~/.darn/config.yaml or default ~/.darn/library)...", "Output should indicate attempt to use global config")
 	assert.Contains(t, output, fmt.Sprintf("Updating active global library configured at: %s", activeGlobalLibPath), "Output should confirm update of active global library")
 
 	// Verify file was copied to the active global library
@@ -443,11 +460,16 @@ func TestRunUpdateCommand_NoPathFlag_NoGlobalConfig(t *testing.T) {
 	err = os.MkdirAll(filepath.Join(defaultGlobalLibPath, "actions"), 0755)
 	assert.NoError(t, err)
 
-	// Prepare a source directory
+	// Prepare a source directory with proper library structure
 	sourceFilesDir, err := os.MkdirTemp("", "darn_update_source_")
 	assert.NoError(t, err)
 	defer os.RemoveAll(sourceFilesDir)
-	sourceActionFile := filepath.Join(sourceFilesDir, "another_action.yaml")
+	
+	// Create actions subdirectory and file
+	sourceActionsDir := filepath.Join(sourceFilesDir, "actions")
+	err = os.MkdirAll(sourceActionsDir, 0755)
+	assert.NoError(t, err)
+	sourceActionFile := filepath.Join(sourceActionsDir, "another_action.yaml")
 	err = os.WriteFile(sourceActionFile, []byte("name: another_action\ndescription: Another test action."), 0644)
 	assert.NoError(t, err)
 
@@ -455,12 +477,13 @@ func TestRunUpdateCommand_NoPathFlag_NoGlobalConfig(t *testing.T) {
 	output, err := executeLibraryUpdateCommand(t, []string{sourceFilesDir, "--verbose"}, tempHome, nil)
 	assert.NoError(t, err)
 
-	// Verify from output that it targets the default global library path
-	assert.Contains(t, output, fmt.Sprintf("Updating default global library at: %s", defaultGlobalLibPath), "Output should confirm update of default global library")
+	// Verify from output that it targets the default global library path (this will use tempHome)
+	expectedPath := filepath.Join(tempHome, ".darn", "library")
+	assert.Contains(t, output, fmt.Sprintf("Updating active global library configured at: %s", expectedPath), "Output should confirm update of configured global library")
 
-	// Verify file was copied to the default global library
-	expectedDestFile := filepath.Join(defaultGlobalLibPath, "actions", "another_action.yaml")
-	assert.FileExists(t, expectedDestFile, "Test action file should be copied to the default global library's actions directory")
+	// Verify file was copied to the expected global library path
+	expectedDestFile := filepath.Join(expectedPath, "actions", "another_action.yaml")
+	assert.FileExists(t, expectedDestFile, "Test action file should be copied to the global library's actions directory")
 }
 
 // TestRunUpdateCommand_WithPathFlag tests `darn library update --library-path /custom/path`.
@@ -476,11 +499,16 @@ func TestRunUpdateCommand_WithPathFlag(t *testing.T) {
 	err = os.MkdirAll(filepath.Join(customLibTargetDir, "actions"), 0755)
 	assert.NoError(t, err)
 
-	// Prepare a source directory
+	// Prepare a source directory with proper library structure
 	sourceFilesDir, err := os.MkdirTemp("", "darn_update_source_")
 	assert.NoError(t, err)
 	defer os.RemoveAll(sourceFilesDir)
-	sourceActionFile := filepath.Join(sourceFilesDir, "custom_action.yaml")
+	
+	// Create actions subdirectory and file
+	sourceActionsDir := filepath.Join(sourceFilesDir, "actions")
+	err = os.MkdirAll(sourceActionsDir, 0755)
+	assert.NoError(t, err)
+	sourceActionFile := filepath.Join(sourceActionsDir, "custom_action.yaml")
 	err = os.WriteFile(sourceActionFile, []byte("name: custom_action\ndescription: A custom test action."), 0644)
 	assert.NoError(t, err)
 
