@@ -3,17 +3,16 @@
 package darnit
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/kusari-oss/darn/internal/core/action"
 	"github.com/kusari-oss/darn/internal/core/config"
+	"github.com/kusari-oss/darn/internal/core/format"
 	"github.com/kusari-oss/darn/internal/core/models"
 	"github.com/kusari-oss/darn/internal/darn/resolver"
 	"github.com/kusari-oss/darn/internal/darnit/executor"
-	"gopkg.in/yaml.v3"
 )
 
 // Report represents the parsed report data
@@ -33,40 +32,21 @@ type GenerateOptions struct {
 	VerboseLogging    bool
 }
 
-// ParseReportFile reads and parses a report file
+// ParseReportFile reads and parses a report file (supports both YAML and JSON)
 func ParseReportFile(filePath string) (*Report, error) {
-	// Read the report file
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading report file: %w", err)
-	}
-
-	// First try JSON format
 	var reportData map[string]interface{}
-	err = json.Unmarshal(data, &reportData)
-	if err != nil {
-		// If JSON fails, try YAML
-		err = yaml.Unmarshal(data, &reportData)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing report (tried JSON and YAML): %w", err)
-		}
+	if err := format.ParseFile(filePath, &reportData); err != nil {
+		return nil, fmt.Errorf("error parsing report file: %w", err)
 	}
 
 	return &Report{Findings: reportData}, nil
 }
 
-// LoadPlanFile loads a remediation plan from a file
+// LoadPlanFile loads a remediation plan from a file (supports both YAML and JSON)
 func LoadPlanFile(filePath string) (*models.RemediationPlan, error) {
-	// Read the plan file
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading plan file: %w", err)
-	}
-
-	// Parse JSON
 	var plan models.RemediationPlan
-	if err := json.Unmarshal(data, &plan); err != nil {
-		return nil, fmt.Errorf("error parsing plan JSON: %w", err)
+	if err := format.ParseFile(filePath, &plan); err != nil {
+		return nil, fmt.Errorf("error parsing plan file: %w", err)
 	}
 
 	return &plan, nil
@@ -145,14 +125,17 @@ func CreateActionResolver(workingDir string) (*action.Factory, *resolver.Resolve
 	return factory, resolver, nil
 }
 
-// LoadDefaultParameters loads default parameters from config
+// LoadDefaultParameters loads default parameters from config (supports YAML and JSON)
 func LoadDefaultParameters(configPath string) (map[string]interface{}, error) {
 	if configPath == "" {
-		// Look in standard locations
+		// Look in standard locations (try both YAML and JSON extensions)
 		candidates := []string{
 			"./params.yaml",
+			"./params.json",
 			"./.darn/params.yaml",
+			"./.darn/params.json",
 			os.ExpandEnv("$HOME/.darn/params.yaml"),
+			os.ExpandEnv("$HOME/.darn/params.json"),
 		}
 
 		for _, path := range candidates {
@@ -167,17 +150,11 @@ func LoadDefaultParameters(configPath string) (map[string]interface{}, error) {
 		}
 	}
 
-	// Read the file
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse YAML
+	// Parse the file using the format utility
 	var config struct {
-		DefaultParameters map[string]interface{} `yaml:"default_parameters"`
+		DefaultParameters map[string]interface{} `yaml:"default_parameters" json:"default_parameters"`
 	}
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	if err := format.ParseFile(configPath, &config); err != nil {
 		return nil, err
 	}
 
@@ -244,21 +221,15 @@ func ValidatePlan(plan *models.RemediationPlan) error {
 	return nil
 }
 
-// SavePlanToFile saves a remediation plan to a file
+// SavePlanToFile saves a remediation plan to a file (format determined by file extension)
 func SavePlanToFile(plan *models.RemediationPlan, filePath string) error {
 	// Validate the plan
 	if err := ValidatePlan(plan); err != nil {
 		return fmt.Errorf("invalid plan: %w", err)
 	}
 
-	// Marshal to JSON
-	data, err := json.MarshalIndent(plan, "", "  ")
-	if err != nil {
-		return fmt.Errorf("error marshaling plan to JSON: %w", err)
-	}
-
-	// Write to file
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
+	// Write to file using appropriate format based on extension
+	if err := format.WriteFile(filePath, plan); err != nil {
 		return fmt.Errorf("error writing plan to file: %w", err)
 	}
 

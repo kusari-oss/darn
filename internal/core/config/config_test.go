@@ -31,8 +31,6 @@ func createTempDarnConfig(t *testing.T, baseDir string, configContent *Config) s
 }
 
 func TestLoadConfig_Prioritization(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	assert.NoError(t, err)
 
 	// Test cases
 	tests := []struct {
@@ -49,14 +47,14 @@ func TestLoadConfig_Prioritization(t *testing.T) {
 	}{
 		{
 			name:                "1. Default global library when nothing else is set",
-			expectedLibraryPath: ExpandPathWithTilde(DefaultGlobalLibrary), // Should be expanded
+			expectedLibraryPath: "{{HOME}}/.darn/library", // Use placeholder since all tests now use temp HOME
 		},
 		{
 			name: "2. Global config (~/.darn/config.yaml) overrides default",
 			setupGlobalConfig: func(t *testing.T, globalDir string) { // globalDir is tempHomeDir
 				createTempDarnConfig(t, globalDir, &Config{LibraryPath: "~/global_lib_from_default_loc"})
 			},
-			expectedLibraryPath: filepath.Join(homeDir, "global_lib_from_default_loc"), // homeDir is actual user home for expectation
+			expectedLibraryPath: "{{HOME}}/global_lib_from_default_loc", // Use placeholder since HOME gets changed
 		},
 		// Test Case 3 (Original: Project config overrides global config) - REMOVED as project config is no longer loaded by LoadConfig.
 		// Expected behavior: Global config is used if present.
@@ -66,15 +64,15 @@ func TestLoadConfig_Prioritization(t *testing.T) {
 				createTempDarnConfig(t, globalDir, &Config{LibraryPath: "~/global_lib_ignored_by_cmdline"})
 			},
 			cmdLineLibraryPath:  "~/cmd_line_over_global",
-			expectedLibraryPath: filepath.Join(homeDir, "cmd_line_over_global"),
-			expectedCmdLinePath: filepath.Join(homeDir, "cmd_line_over_global"),
+			expectedLibraryPath: "{{HOME}}/cmd_line_over_global",
+			expectedCmdLinePath: "{{HOME}}/cmd_line_over_global",
 		},
 		{
 			name: "4. Custom global config (override path) overrides default (previously test 5)",
 			setupCustomGlobalConfig: func(t *testing.T, customGlobalDir string) string {
 				return createTempConfigFile(t, customGlobalDir, "custom_global.yaml", &Config{LibraryPath: "~/custom_global_lib"})
 			},
-			expectedLibraryPath: filepath.Join(homeDir, "custom_global_lib"),
+			expectedLibraryPath: "{{HOME}}/custom_global_lib",
 		},
 		// Test Case 6 (Original: Project config overrides custom global config) - REMOVED.
 		// Expected behavior: Custom global config is used if present.
@@ -90,8 +88,8 @@ func TestLoadConfig_Prioritization(t *testing.T) {
 		{
 			name:                "6. Expansion of ~ in cmdLineLibraryPath (previously test 8)",
 			cmdLineLibraryPath:  "~/path_from_cmd",
-			expectedLibraryPath: filepath.Join(homeDir, "path_from_cmd"),
-			expectedCmdLinePath: filepath.Join(homeDir, "path_from_cmd"),
+			expectedLibraryPath: "{{HOME}}/path_from_cmd",
+			expectedCmdLinePath: "{{HOME}}/path_from_cmd",
 		},
 		// Test Case 9 (Original: Expansion of ~ in project config LibraryPath) - REMOVED.
 		{
@@ -99,14 +97,14 @@ func TestLoadConfig_Prioritization(t *testing.T) {
 			setupGlobalConfig: func(t *testing.T, globalDir string) { // globalDir is tempHomeDir
 				createTempDarnConfig(t, globalDir, &Config{LibraryPath: "~/path_from_global_config"})
 			},
-			expectedLibraryPath: filepath.Join(homeDir, "path_from_global_config"),
+			expectedLibraryPath: "{{HOME}}/path_from_global_config",
 		},
 		{
 			name: "8. Expansion of ~ in global config LibraryPath (custom location) (previously test 11)",
 			setupCustomGlobalConfig: func(t *testing.T, customGlobalDir string) string {
 				return createTempConfigFile(t, customGlobalDir, "custom_global_for_tilde.yaml", &Config{LibraryPath: "~/path_from_custom_global"})
 			},
-			expectedLibraryPath: filepath.Join(homeDir, "path_from_custom_global"),
+			expectedLibraryPath: "{{HOME}}/path_from_custom_global",
 		},
 		// Test Cases 12 & 13 (Original: Project config relative/absolute paths) - REMOVED.
 	}
@@ -117,6 +115,20 @@ func TestLoadConfig_Prioritization(t *testing.T) {
 			tempBaseDir, err := os.MkdirTemp("", "darn_config_test_")
 			assert.NoError(t, err)
 			defer os.RemoveAll(tempBaseDir)
+			
+			// Isolate all tests from the user's actual global config by using DARN_HOME
+			originalDarnHome := os.Getenv("DARN_HOME")
+			testHomeDir := filepath.Join(tempBaseDir, "test_home")
+			err = os.MkdirAll(testHomeDir, 0755)
+			assert.NoError(t, err)
+			os.Setenv("DARN_HOME", testHomeDir)
+			defer func() {
+				if originalDarnHome == "" {
+					os.Unsetenv("DARN_HOME")
+				} else {
+					os.Setenv("DARN_HOME", originalDarnHome)
+				}
+			}()
 
 			// projectDir := tt.projectDir // Removed
 			// if projectDir == "" { // Removed
@@ -170,19 +182,9 @@ func TestLoadConfig_Prioritization(t *testing.T) {
 
 			// Setup for default global config path testing (e.g. ~/.darn/config.yaml)
 			if tt.setupGlobalConfig != nil {
-				// Create a temporary directory to act as HOME
-				tempHomeDir, err := os.MkdirTemp(tempBaseDir, "testhome_")
-				assert.NoError(t, err)
-				defer os.RemoveAll(tempHomeDir) // Clean up temp home
-
-				originalHome := os.Getenv("HOME")
-				os.Setenv("HOME", tempHomeDir)
-				defer os.Setenv("HOME", originalHome)
-
-				// Now, GlobalConfigFilePath() inside LoadConfig should use this tempHomeDir.
-				// The setupGlobalConfig function creates the .darn/config.yaml in this tempHomeDir.
+				// The setupGlobalConfig function creates the .darn/config.yaml in the testHomeDir.
 				// For LoadConfig to pick it up without an override, globalConfigPathOverride should be empty.
-				tt.setupGlobalConfig(t, tempHomeDir) // tt.setupGlobalConfig creates <tempHomeDir>/.darn/config.yaml
+				tt.setupGlobalConfig(t, testHomeDir) // tt.setupGlobalConfig creates <testHomeDir>/.darn/config.yaml
 				actualGlobalConfigPathToUse = "" // Rely on default mechanism to find it in new HOME
 			}
 
@@ -217,16 +219,11 @@ func TestLoadConfig_Prioritization(t *testing.T) {
 
 			var expectedLibPath string
 			// Paths starting with '~' or '/' are absolute or home-relative and should be expanded.
+			// Paths with {{HOME}} placeholder should also be expanded.
 			// Other paths are relative and should be compared as is (they are stored as read from config).
-			if strings.HasPrefix(tt.expectedLibraryPath, "~") || strings.HasPrefix(tt.expectedLibraryPath, "/") {
-				// Determine the correct homeDir for path expansion in expected values.
-				// If HOME was overridden for setupGlobalConfig, use that overridden HOME.
-				var currentHomeDirForTest string
-				if tt.setupGlobalConfig != nil {
-					currentHomeDirForTest = os.Getenv("HOME") // This will be tempHomeDir
-				} else {
-					currentHomeDirForTest = homeDir // Actual user home
-				}
+			if strings.HasPrefix(tt.expectedLibraryPath, "~") || strings.HasPrefix(tt.expectedLibraryPath, "/") || strings.Contains(tt.expectedLibraryPath, "{{HOME}}") {
+				// All tests now use the test home directory via DARN_HOME
+				currentHomeDirForTest := os.Getenv("DARN_HOME") // This will be testHomeDir for all tests
 
 				expectedLibPath = strings.ReplaceAll(tt.expectedLibraryPath, "{{HOME}}", currentHomeDirForTest)
 				// {{PROJECT_DIR}} replacement for expectedLibraryPath
@@ -254,12 +251,8 @@ func TestLoadConfig_Prioritization(t *testing.T) {
 
 			var expectedCmdPath string
 			if tt.expectedCmdLinePath != "" {
-				var currentHomeDirForTest string
-				if tt.setupGlobalConfig != nil {
-					currentHomeDirForTest = os.Getenv("HOME")
-				} else {
-					currentHomeDirForTest = homeDir
-				}
+				// All tests now use the test home directory via DARN_HOME
+				currentHomeDirForTest := os.Getenv("DARN_HOME") // This will be testHomeDir for all tests
 				expectedCmdPath = strings.ReplaceAll(tt.expectedCmdLinePath, "{{HOME}}", currentHomeDirForTest)
 				// expectedCmdPath = strings.ReplaceAll(expectedCmdPath, "{{PROJECT_DIR}}", projectDir) // projectDir no longer used for this
 			}
@@ -269,9 +262,15 @@ func TestLoadConfig_Prioritization(t *testing.T) {
 }
 
 func TestExpandPathWithTilde(t *testing.T) {
-	// Capture original HOME to restore it, as some tests might modify it.
-	originalHomeEnv := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHomeEnv)
+	// Capture original DARN_HOME to restore it, as some tests might modify it.
+	originalDarnHome := os.Getenv("DARN_HOME")
+	defer func() {
+		if originalDarnHome == "" {
+			os.Unsetenv("DARN_HOME")
+		} else {
+			os.Setenv("DARN_HOME", originalDarnHome)
+		}
+	}()
 
 	// Test Case 1: Standard home directory
 	t.Run("StandardHome", func(t *testing.T) {
@@ -301,30 +300,22 @@ func TestExpandPathWithTilde(t *testing.T) {
 		}
 	})
 
-	// Test Case 2: Overridden HOME environment variable (if os.UserHomeDir respects it - it often doesn't directly)
-	// This test is more about documenting behavior than strict testing of UserHomeDir mocks.
-	// Go's os.UserHomeDir() might ignore $HOME on some systems (e.g., macOS when cached).
-	t.Run("WithTemporaryHomeEnv", func(t *testing.T) {
+	// Test Case 2: Overridden DARN_HOME environment variable
+	// This tests the DARN_HOME override functionality for testing purposes.
+	t.Run("WithTemporaryDarnHome", func(t *testing.T) {
 		tempHome, err := os.MkdirTemp("", "fakehome_expand_")
 		assert.NoError(t, err)
 		defer os.RemoveAll(tempHome)
 
-		os.Setenv("HOME", tempHome) // Set $HOME to our temporary directory
-
-		// Re-fetch actual home dir, which *might* now be tempHome if os.UserHomeDir respects $HOME update.
-		// Note: This is platform and Go version dependent.
-		effectiveHomeDir, err := os.UserHomeDir()
-		assert.NoError(t, err)
-		// If effectiveHomeDir is not tempHome, it means os.UserHomeDir() did not use the new $HOME.
-		// The test proceeds, but its interpretation might vary.
+		os.Setenv("DARN_HOME", tempHome) // Set DARN_HOME to our temporary directory
 
 		tests := []struct {
 			name     string
 			input    string
 			expected string
 		}{
-			{"Tilde path with temp home", "~/testdir_temp", filepath.Join(effectiveHomeDir, "testdir_temp")},
-			{"Just tilde with temp home", "~", effectiveHomeDir},
+			{"Tilde path with temp home", "~/testdir_temp", filepath.Join(tempHome, "testdir_temp")},
+			{"Just tilde with temp home", "~", tempHome},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -332,7 +323,6 @@ func TestExpandPathWithTilde(t *testing.T) {
 				assert.Equal(t, tt.expected, expanded)
 			})
 		}
-		os.Setenv("HOME", originalHomeEnv) // Restore HOME
 	})
 }
 

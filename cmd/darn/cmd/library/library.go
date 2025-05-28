@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/kusari-oss/darn/internal/core/config"
 	"github.com/kusari-oss/darn/internal/core/library"
 	"github.com/kusari-oss/darn/internal/defaults"
-	"github.com/kusari-oss/darn/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -83,7 +81,7 @@ func runSetGlobalCommand(cmd *cobra.Command, args []string) {
 	// Define the global config file path
 	globalConfigPath, err := config.GlobalConfigFilePath()
 	if err != nil {
-		fmt.Printf("Error determining global config path: %v\n", err)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error determining global config path: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -92,10 +90,10 @@ func runSetGlobalCommand(cmd *cobra.Command, args []string) {
 	if err != nil {
 		// If not found or other error, create a new default config
 		if os.IsNotExist(err) {
-			fmt.Printf("Global config file not found at %s. Creating a new one.\n", globalConfigPath)
+			fmt.Fprintf(cmd.OutOrStdout(), "Global config file not found at %s. Creating a new one.\n", globalConfigPath)
 			cfg = config.NewDefaultConfig()
 		} else {
-			fmt.Printf("Error loading global config file '%s': %v\n", globalConfigPath, err)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error loading global config file '%s': %v\n", globalConfigPath, err)
 			// Still try to create a new one if loading failed for other reasons,
 			// as the user intends to set a new global library.
 			cfg = config.NewDefaultConfig()
@@ -109,7 +107,7 @@ func runSetGlobalCommand(cmd *cobra.Command, args []string) {
 
 	// Save the modified config back to the global config file path
 	if err := config.SaveGlobalConfig(cfg); err != nil {
-		fmt.Printf("Error saving global configuration to '%s': %v\n", globalConfigPath, err)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error saving global configuration to '%s': %v\n", globalConfigPath, err)
 		os.Exit(1)
 	}
 
@@ -119,9 +117,9 @@ func runSetGlobalCommand(cmd *cobra.Command, args []string) {
 		pathExists = "does not exist (it may need to be initialized or created)"
 	}
 
-	fmt.Printf("Global darn library path successfully set to: %s\n", expandedLibraryPath)
-	fmt.Printf("The specified path %s.\n", pathExists)
-	fmt.Printf("Configuration saved to: %s\n", globalConfigPath)
+	fmt.Fprintf(cmd.OutOrStdout(), "Global darn library path successfully set to: %s\n", expandedLibraryPath)
+	fmt.Fprintf(cmd.OutOrStdout(), "The specified path %s.\n", pathExists)
+	fmt.Fprintf(cmd.OutOrStdout(), "Configuration saved to: %s\n", globalConfigPath)
 }
 
 // newInitCommand creates the init subcommand
@@ -209,7 +207,7 @@ func runInitCommand(cmd *cobra.Command, args []string) {
 		DefaultsURL: remoteURL,
 		UseRemote:   !localOnly,
 		Timeout:     10, // TODO: Make timeout configurable?
-		Verbose:     verbose,
+		//Verbose:     verbose,
 	}
 	manager := defaults.NewManager(defaultsConfig)
 
@@ -289,13 +287,13 @@ func runUpdateCommand(cmd *cobra.Command, args []string) {
 
 	if cmd.Flags().Changed("library-path") {
 		if verbose {
-			fmt.Printf("Updating library specified by --library-path flag: %s\n", libraryPathFlag)
+			fmt.Fprintf(cmd.OutOrStdout(), "Updating library specified by --library-path flag: %s\n", libraryPathFlag)
 		}
 		finalLibraryPathToUpdate = config.ExpandPathWithTilde(libraryPathFlag)
 	} else {
 		// --library-path not set, try to load global config
 		if verbose {
-			fmt.Println("Attempting to update active global library (from ~/.darn/config.yaml or default ~/.darn/library)...")
+			fmt.Fprintln(cmd.OutOrStdout(), "Attempting to update active global library (from ~/.darn/config.yaml or default ~/.darn/library)...")
 		}
 		// LoadConfig takes (cmdLineLibraryPath, globalConfigPathOverride)
 		// For this specific purpose of finding the *active* global library, these should be empty.
@@ -303,21 +301,21 @@ func runUpdateCommand(cmd *cobra.Command, args []string) {
 		if err != nil {
 			// This error might occur if the global config is malformed.
 			// LoadConfig itself prints warnings for non-existent files.
-			fmt.Printf("Warning: Error loading global configuration: %v. Will attempt to update default global library path.\n", err)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: Error loading global configuration: %v. Will attempt to update default global library path.\n", err)
 			finalLibraryPathToUpdate = config.ExpandPathWithTilde(config.DefaultGlobalLibrary)
 			if verbose || !cmd.Flags().Changed("library-path") { // Print message if not overridden by flag
-				fmt.Printf("Updating default global library at: %s (no active global library configured or error loading config).\n", finalLibraryPathToUpdate)
+				fmt.Fprintf(cmd.OutOrStdout(), "Updating default global library at: %s (no active global library configured or error loading config).\n", finalLibraryPathToUpdate)
 			}
 		} else {
 			if globalCfg != nil && globalCfg.LibraryPath != "" {
 				finalLibraryPathToUpdate = globalCfg.LibraryPath // This path should already be expanded by LoadConfig
 				if verbose || !cmd.Flags().Changed("library-path") {
-					fmt.Printf("Updating active global library configured at: %s\n", finalLibraryPathToUpdate)
+					fmt.Fprintf(cmd.OutOrStdout(), "Updating active global library configured at: %s\n", finalLibraryPathToUpdate)
 				}
 			} else {
 				finalLibraryPathToUpdate = config.ExpandPathWithTilde(config.DefaultGlobalLibrary)
 				if verbose || !cmd.Flags().Changed("library-path") {
-					fmt.Printf("Updating default global library at: %s (no library path in global config or config not found).\n", finalLibraryPathToUpdate)
+					fmt.Fprintf(cmd.OutOrStdout(), "Updating default global library at: %s (no library path in global config or config not found).\n", finalLibraryPathToUpdate)
 				}
 			}
 		}
@@ -326,7 +324,7 @@ func runUpdateCommand(cmd *cobra.Command, args []string) {
 	// Ensure finalLibraryPathToUpdate is absolute
 	absFinalLibraryPathToUpdate, err := filepath.Abs(finalLibraryPathToUpdate)
 	if err != nil {
-		fmt.Printf("Error resolving absolute path for library to update '%s': %v\n", finalLibraryPathToUpdate, err)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error resolving absolute path for library to update '%s': %v\n", finalLibraryPathToUpdate, err)
 		os.Exit(1)
 	}
 	finalLibraryPathToUpdate = absFinalLibraryPathToUpdate
@@ -336,16 +334,16 @@ func runUpdateCommand(cmd *cobra.Command, args []string) {
 
 	// Update library
 	if err := updater.UpdateLibrary(); err != nil {
-		fmt.Printf("Error updating library at %s: %v\n", finalLibraryPathToUpdate, err)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error updating library at %s: %v\n", finalLibraryPathToUpdate, err)
 		os.Exit(1)
 	}
 
 	if !dryRun {
-		fmt.Println("\nLibrary update complete!")
-		fmt.Printf("Updated library at: %s\n", finalLibraryPathToUpdate)
+		fmt.Fprintln(cmd.OutOrStdout(), "\nLibrary update complete!")
+		fmt.Fprintf(cmd.OutOrStdout(), "Updated library at: %s\n", finalLibraryPathToUpdate)
 	} else {
-		fmt.Println("\nDry run completed. No files were actually modified.")
-		fmt.Printf("Target library for update (if not dry run) would have been: %s\n", finalLibraryPathToUpdate)
+		fmt.Fprintln(cmd.OutOrStdout(), "\nDry run completed. No files were actually modified.")
+		fmt.Fprintf(cmd.OutOrStdout(), "Target library for update (if not dry run) would have been: %s\n", finalLibraryPathToUpdate)
 	}
 }
 
