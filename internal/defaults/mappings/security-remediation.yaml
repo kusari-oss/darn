@@ -2,7 +2,7 @@
 
 mappings:
   - id: "security-policy-remediation"
-    condition: "findings.security_policy == 'missing'"
+    condition: "security_policy == 'missing'"
     mapping_ref: "security-md-workflow.yaml"
     parameters:
       project_name: "{{.project_name}}"
@@ -10,6 +10,6 @@ mappings:
     reason: "Create security documentation workflow"
   
   - id: "org-security-remediation"
-    condition: "findings.mfa_status == 'disabled'"
+    condition: "mfa_status == 'disabled'"
     mapping_ref: "github-security-settings.yaml"
     reason: "Apply organization security settings"

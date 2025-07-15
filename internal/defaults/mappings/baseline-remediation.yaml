@@ -11,10 +11,10 @@ mappings:
           branch_name: "add-security-baseline-docs"
         reason: "Create branch for security documentation"
         # Pure CEL conditions to check if any relevant controls have failed
-        condition: "findings.controls.exists(c, c.startsWith('OSPS-VM-04') && findings.has_failed_control[c] == true) || 
-                    findings.controls.exists(c, c.startsWith('OSPS-GV-03') && findings.has_failed_control[c] == true) || 
-                    findings.controls.exists(c, c.startsWith('OSPS-LE-02') && findings.has_failed_control[c] == true) || 
-                    findings.controls.exists(c, c.startsWith('OSPS-DO-01') && findings.has_failed_control[c] == true)"
+        condition: "controls.exists(c, c.startsWith('OSPS-VM-04') && has_failed_control[c] == true) || 
+                    controls.exists(c, c.startsWith('OSPS-GV-03') && has_failed_control[c] == true) || 
+                    controls.exists(c, c.startsWith('OSPS-LE-02') && has_failed_control[c] == true) || 
+                    controls.exists(c, c.startsWith('OSPS-DO-01') && has_failed_control[c] == true)"
 
       # Documentation remediation - Only add if Security Policy is missing (OSPS-VM-04.01)
       - id: "add-security-docs"
@@ -24,7 +24,7 @@ mappings:
           emails: ["{{.security_email}}"]
         reason: "Add SECURITY.md file (OSPS-VM-04.01)"
         depends_on: ["create-security-branch"]
-        condition: "findings.failed_controls.exists(c, c == 'OSPS-VM-04.01')"
+        condition: "failed_controls.exists(c, c == 'OSPS-VM-04.01')"
       
       # Governance remediation - Only add if Contribution Guide is missing (OSPS-GV-03.01)
       - id: "add-contributing-docs"
@@ -34,7 +34,7 @@ mappings:
           repository: "{{.organization}}/{{.repo_name}}"
         reason: "Add CONTRIBUTING.md file (OSPS-GV-03.01)"
         depends_on: ["create-security-branch"]
-        condition: "findings.failed_controls.exists(c, c == 'OSPS-GV-03.01')"
+        condition: "failed_controls.exists(c, c == 'OSPS-GV-03.01')"
       
       # Legal remediation - Only add if License is missing (OSPS-LE-02.01, OSPS-LE-03.01)
       - id: "add-license-apache"
@@ -46,7 +46,7 @@ mappings:
           copyright_holder: "{{.organization}}"
         reason: "Add LICENSE file (OSPS-LE-02.01, OSPS-LE-03.01)"
         depends_on: ["create-security-branch"]
-        condition: "findings.failed_controls.exists(c, c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01')"
+        condition: "failed_controls.exists(c, c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01')"
       
       # User guide - Only add if user guide is missing (OSPS-DO-01.01)
       - id: "add-user-guide"
@@ -56,7 +56,7 @@ mappings:
           add_user_guide: true
         reason: "Add user guide documentation (OSPS-DO-01.01)"
         depends_on: ["create-security-branch"]
-        condition: "findings.failed_controls.exists(c, c == 'OSPS-DO-01.01')"
+        condition: "failed_controls.exists(c, c == 'OSPS-DO-01.01')"
         
       # Commit changes - Only if any of the docs were added
       - id: "add-files-to-git"
@@ -67,12 +67,12 @@ mappings:
           [
             'create-security-branch'
           ] + 
-          ('OSPS-GV-03.01' in findings.has_failed_control ? ['add-contributing-docs'] : []) +
-          (('OSPS-LE-02.01' in findings.has_failed_control || 'OSPS-LE-03.01' in findings.has_failed_control) ? ['add-license-apache'] : []) +
-          ('OSPS-DO-01.01' in findings.has_failed_control ? ['add-user-guide'] : []) +
-          ('OSPS-VM-04.01' in findings.has_failed_control ? ['add-security-docs'] : [])
+          ('OSPS-GV-03.01' in has_failed_control ? ['add-contributing-docs'] : []) +
+          (('OSPS-LE-02.01' in has_failed_control || 'OSPS-LE-03.01' in has_failed_control) ? ['add-license-apache'] : []) +
+          ('OSPS-DO-01.01' in has_failed_control ? ['add-user-guide'] : []) +
+          ('OSPS-VM-04.01' in has_failed_control ? ['add-security-docs'] : [])
         reason: "Stage security documentation files"
-        condition: "size(findings.failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"
+        condition: "size(failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"
         
       - id: "commit-security-docs"
         action: "git-commit"
@@ -80,7 +80,7 @@ mappings:
           message: "Add OpenSSF Baseline security documentation"
         depends_on: ["add-files-to-git"]
         reason: "Commit security documentation to branch"
-        condition: "size(findings.failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"
+        condition: "size(failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"
       
       - id: "push-security-branch"
         action: "git-push"
@@ -88,7 +88,7 @@ mappings:
           branch: "add-security-baseline-docs"
         depends_on: ["commit-security-docs"]
         reason: "Push branch to remote repository"
-        condition: "size(findings.failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"
+        condition: "size(failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"
       
       - id: "create-security-pr"
         action: "create-pr"
@@ -98,16 +98,16 @@ mappings:
           body: |
             This PR adds documentation to comply with the OpenSSF Baseline security controls:
 
-            {{if findings.failed_controls.exists(c, c == 'OSPS-VM-04.01')}}
+            {{if failed_controls.exists(c, c == 'OSPS-VM-04.01')}}
             - SECURITY.md file for vulnerability reporting (OSPS-VM-04.01)
             {{end}}
-            {{if findings.failed_controls.exists(c, c == 'OSPS-GV-03.01')}}
+            {{if failed_controls.exists(c, c == 'OSPS-GV-03.01')}}
             - CONTRIBUTING.md guide (OSPS-GV-03.01)
             {{end}}
-            {{if findings.failed_controls.exists(c, c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01')}}
+            {{if failed_controls.exists(c, c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01')}}
             - LICENSE file (OSPS-LE-02.01, OSPS-LE-03.01)
             {{end}}
-            {{if findings.failed_controls.exists(c, c == 'OSPS-DO-01.01')}}
+            {{if failed_controls.exists(c, c == 'OSPS-DO-01.01')}}
             - User guide documentation (OSPS-DO-01.01)
             {{end}}
 
@@ -115,4 +115,4 @@ mappings:
           repo: "{{.organization}}/{{.repo_name}}"
         depends_on: ["push-security-branch"]
         reason: "Create PR for security documentation"
-        condition: "size(findings.failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"
+        condition: "size(failed_controls.filter(c, c == 'OSPS-VM-04.01' || c == 'OSPS-GV-03.01' || c == 'OSPS-LE-02.01' || c == 'OSPS-LE-03.01' || c == 'OSPS-DO-01.01')) > 0"

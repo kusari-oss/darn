@@ -17,7 +17,7 @@ import (
 
 // Report represents the parsed report data
 type Report struct {
-	Findings map[string]interface{}
+	Findings map[string]any
 }
 
 // GenerateOptions contains options for plan generation
@@ -25,7 +25,7 @@ type GenerateOptions struct {
 	DefaultsPath      string
 	RepoPath          string
 	MappingsDir       string
-	ExtraParams       map[string]interface{}
+	ExtraParams       map[string]any
 	SkipDefaults      bool
 	SkipRepoInference bool
 	NonInteractive    bool
@@ -34,11 +34,20 @@ type GenerateOptions struct {
 
 // ParseReportFile reads and parses a report file (supports both YAML and JSON)
 func ParseReportFile(filePath string) (*Report, error) {
-	var reportData map[string]interface{}
+	var reportData map[string]any
 	if err := format.ParseFile(filePath, &reportData); err != nil {
 		return nil, fmt.Errorf("error parsing report file: %w", err)
 	}
 
+	// If the report has a "findings" field, extract its contents for flat access
+	if findingsData, hasFindings := reportData["findings"]; hasFindings {
+		if findingsMap, ok := findingsData.(map[string]any); ok {
+			// Use the findings content directly for flat access
+			return &Report{Findings: findingsMap}, nil
+		}
+	}
+
+	// For reports without findings wrapper, use the data directly
 	return &Report{Findings: reportData}, nil
 }
 
@@ -126,7 +135,7 @@ func CreateActionResolver(workingDir string) (*action.Factory, *resolver.Resolve
 }
 
 // LoadDefaultParameters loads default parameters from config (supports YAML and JSON)
-func LoadDefaultParameters(configPath string) (map[string]interface{}, error) {
+func LoadDefaultParameters(configPath string) (map[string]any, error) {
 	if configPath == "" {
 		// Look in standard locations (try both YAML and JSON extensions)
 		candidates := []string{
@@ -146,13 +155,13 @@ func LoadDefaultParameters(configPath string) (map[string]interface{}, error) {
 		}
 
 		if configPath == "" {
-			return make(map[string]interface{}), nil
+			return make(map[string]any), nil
 		}
 	}
 
 	// Parse the file using the format utility
 	var config struct {
-		DefaultParameters map[string]interface{} `yaml:"default_parameters" json:"default_parameters"`
+		DefaultParameters map[string]any `yaml:"default_parameters" json:"default_parameters"`
 	}
 	if err := format.ParseFile(configPath, &config); err != nil {
 		return nil, err
@@ -162,7 +171,7 @@ func LoadDefaultParameters(configPath string) (map[string]interface{}, error) {
 }
 
 // PromptForMissingParameters asks the user for any missing required parameters
-func PromptForMissingParameters(data map[string]interface{}, requiredParams []string) error {
+func PromptForMissingParameters(data map[string]any, requiredParams []string) error {
 	for _, param := range requiredParams {
 		if _, exists := data[param]; !exists {
 			fmt.Printf("Required parameter '%s' is missing. Please enter a value: ", param)

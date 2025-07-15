@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Example mapping demonstrating the create-file action
+mappings:
+  - id: "create-docs-example"
+    condition: "missing_documentation == true"
+    action: "create-file"
+    parameters:
+      filename: "README.md"
+      content: |
+        # {{.project_name}}
+        
+        This project needs documentation.
+        
+        ## Getting Started
+        
+        Add your project documentation here.
+      directory: "."
+    reason: "Create basic README documentation"
+    
+  - id: "create-config-example"
+    condition: "missing_config == true"
+    action: "create-file"
+    parameters:
+      filename: "config.json"
+      content: |
+        {
+          "project": "{{.project_name}}",
+          "version": "1.0.0",
+          "created_by": "darn remediation tool"
+        }
+      directory: "config"
+    reason: "Create basic configuration file"
