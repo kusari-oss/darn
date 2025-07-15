@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: "create-file"
+description: "Create a file with specified content"
+parameters:
+  - name: "filename"
+    type: "string"
+    required: true
+    description: "Name of the file to create"
+  - name: "content"
+    type: "string"
+    required: true
+    description: "Content to write to the file"
+  - name: "directory"
+    type: "string"
+    required: false
+    default: "."
+    description: "Directory where to create the file (defaults to current directory)"
+type: "shell"
+implementation:
+  command: "sh"
+  args: 
+    - "-c"
+    - |
+      if [ ! -d "{{.directory}}" ]; then
+        mkdir -p "{{.directory}}"
+      fi
+      echo "{{.content}}" > "{{.directory}}/{{.filename}}"
+      echo "Created file: {{.directory}}/{{.filename}}"
