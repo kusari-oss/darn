@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/kusari-oss/darn/internal/core/action"
+	"github.com/kusari-oss/darn/internal/core/library"
 	"gopkg.in/yaml.v3"
 )
 
@@ -40,6 +41,9 @@ type Config struct {
 	UseGlobal          bool   `yaml:"use_global"`
 	UseLocal           bool   `yaml:"use_local"`
 	GlobalFirst        bool   `yaml:"global_first"`
+	
+	// Runtime library manager
+	LibraryManager *library.Manager `yaml:"-"`
 }
 
 // State holds the runtime state of darn
@@ -185,6 +189,9 @@ func LoadConfig(cmdLineLibraryPath string, globalConfigPathOverride string) (*Co
 	// 3. The NewDefaultConfig().LibraryPath (expanded), if neither of the above set it.
 	// All paths that are tilde-expanded by ExpandPathWithTilde will be absolute.
 	// Paths that are not tilde-expanded (e.g. already absolute, or relative without tilde) remain as is.
+
+	// Initialize the library manager
+	config.LibraryManager = library.NewManager(config.LibraryPath, config.CmdLineLibraryPath, false)
 
 	return config, nil
 }
@@ -413,4 +420,52 @@ func loadActionsFromDir(actionsDir string) (map[string]action.Config, error) {
 	}
 
 	return actions, nil
+}
+
+// GetLibraryInfo resolves and validates the library path using the library manager
+func (c *Config) GetLibraryInfo() (*library.LibraryInfo, error) {
+	if c.LibraryManager == nil {
+		c.LibraryManager = library.NewManager(c.LibraryPath, c.CmdLineLibraryPath, false)
+	}
+	return c.LibraryManager.ResolveLibraryPath()
+}
+
+// SetVerboseLibraryLogging enables verbose logging for library operations
+func (c *Config) SetVerboseLibraryLogging(verbose bool) {
+	if c.LibraryManager == nil {
+		c.LibraryManager = library.NewManager(c.LibraryPath, c.CmdLineLibraryPath, verbose)
+	} else {
+		// Recreate with new verbosity setting
+		c.LibraryManager = library.NewManager(c.LibraryPath, c.CmdLineLibraryPath, verbose)
+	}
+}
+
+// ValidateLibrarySetup validates that the configured library is usable
+func (c *Config) ValidateLibrarySetup() error {
+	info, err := c.GetLibraryInfo()
+	if err != nil {
+		return fmt.Errorf("library validation failed: %w", err)
+	}
+	
+	if !info.Valid {
+		return fmt.Errorf("library at %s is not valid: %s", info.Path, strings.Join(info.Errors, ", "))
+	}
+	
+	return nil
+}
+
+// GetLibraryDiagnostics returns diagnostic information about the library system
+func (c *Config) GetLibraryDiagnostics() map[string]interface{} {
+	if c.LibraryManager == nil {
+		c.LibraryManager = library.NewManager(c.LibraryPath, c.CmdLineLibraryPath, false)
+	}
+	return c.LibraryManager.GetDiagnostics()
+}
+
+// ValidateShellCommand validates that a shell command exists and is executable
+func (c *Config) ValidateShellCommand(command string) error {
+	if c.LibraryManager == nil {
+		c.LibraryManager = library.NewManager(c.LibraryPath, c.CmdLineLibraryPath, false)
+	}
+	return c.LibraryManager.ValidateShellCommand(command)
 }

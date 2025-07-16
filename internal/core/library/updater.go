@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/kusari-oss/darn/internal/core/config"
 )
 
 // Updater handles the updating of library files
@@ -251,25 +249,10 @@ func (u *Updater) copyFile(sourcePath, targetPath string) error {
 	return os.Chmod(targetPath, sourceInfo.Mode())
 }
 
-// updateStateFile updates the state file with the latest update time
+// updateStateFile updates a simple timestamp file to track updates
 func (u *Updater) updateStateFile() error {
-	// Try to load existing state
-	state, err := config.LoadState(u.libraryPath)
-	if os.IsNotExist(err) {
-		// Create a new state if none exists
-		state = &config.State{
-			ProjectDir:    u.libraryPath,
-			LibraryInUse:  u.libraryPath,
-			InitializedAt: time.Now().Format(time.RFC3339),
-			Version:       "unknown", // Would be set from version info
-		}
-	} else if err != nil {
-		return err
-	}
-
-	// Update the last updated time
-	state.LastUpdated = time.Now().Format(time.RFC3339)
-
-	// Save the state
-	return config.SaveState(state, u.libraryPath)
+	stateFile := filepath.Join(u.libraryPath, ".last_updated")
+	timestamp := time.Now().Format(time.RFC3339)
+	
+	return os.WriteFile(stateFile, []byte(timestamp), 0644)
 }

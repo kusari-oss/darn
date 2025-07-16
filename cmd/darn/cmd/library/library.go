@@ -33,6 +33,9 @@ func NewLibraryCommand() *cobra.Command {
 	setGlobalCmd := newSetGlobalCommand()
 	libraryCmd.AddCommand(setGlobalCmd)
 
+	// Add diagnose subcommand
+	libraryCmd.AddCommand(diagnoseCmd)
+
 	return libraryCmd
 }
 
