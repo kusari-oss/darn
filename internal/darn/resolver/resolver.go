@@ -421,10 +421,10 @@ func (r *Resolver) ValidateLibraryPaths() []error {
 	return errors
 }
 
-// ValidateActionCommand validates that an action's shell command exists and is executable
+// ValidateActionCommand validates that an action's CLI command exists and is executable
 func (r *Resolver) ValidateActionCommand(actionConfig *action.Config) error {
-	if actionConfig.Type != "shell" && actionConfig.Type != "cli" {
-		return nil // Only validate shell/cli commands
+	if actionConfig.Type != "cli" {
+		return nil // Only validate CLI commands
 	}
 	
 	if actionConfig.Command == "" {

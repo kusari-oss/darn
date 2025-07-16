@@ -148,6 +148,37 @@ Executes the steps defined in a generated plan.
 
 (For more `darnit` subcommands like `parameters` and `mapping`, refer to `darnit --help`)
 
+## Documentation
+
+- **[Library Quick Start](docs/LIBRARY_QUICKSTART.md)** - Get started with the library system in 5 minutes
+- **[Library System Guide](docs/LIBRARY_SYSTEM.md)** - Complete documentation on how the library system works
+- **[Library Management](docs/LIBRARY_MANAGEMENT.md)** - Advanced library management and troubleshooting
+- **[Architecture Overview](docs/ARCHITECTURE.md)** - High-level system architecture and component interactions
+
+### Key Concepts
+
+- **Actions** - Executable operations (CLI commands, file creation)
+- **Templates** - Reusable content patterns  
+- **Mappings** - Rules that map security findings to remediation actions
+- **Library** - Organized collection of actions, templates, and mappings
+
+### Common Commands
+
+```bash
+# Library management
+darn library init           # Initialize new library
+darn library sync           # Update with latest defaults  
+darn library diagnose       # Troubleshoot issues
+
+# Working with actions
+darn action list            # List available actions
+darn action show <name>     # Show action details
+
+# Remediation workflow  
+darnit plan generate        # Generate remediation plan
+darnit plan execute         # Execute remediation plan
+```
+
 ---
 ### Deprecated `darn init`
 

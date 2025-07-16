@@ -70,10 +70,9 @@ parameters:
   - name: "emails"
     type: "array"
     required: true
-type: "shell"
-implementation:
-  command: "echo"
-  args: ["Creating SECURITY.md for {{.name}}"]`,
+type: "cli"
+command: "echo"
+args: ["Creating SECURITY.md for {{.name}}"]`,
 		
 		"enable-mfa.yaml": `# Test action
 name: "enable-mfa"
@@ -82,10 +81,9 @@ parameters:
   - name: "organization"
     type: "string"
     required: true
-type: "shell"
-implementation:
-  command: "echo"
-  args: ["Enabling MFA for {{.organization}}"]`,
+type: "cli"
+command: "echo"
+args: ["Enabling MFA for {{.organization}}"]`,
 	}
 
 	for filename, content := range actionFiles {

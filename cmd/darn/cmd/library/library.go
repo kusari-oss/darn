@@ -36,6 +36,9 @@ func NewLibraryCommand() *cobra.Command {
 	// Add diagnose subcommand
 	libraryCmd.AddCommand(diagnoseCmd)
 
+	// Add sync subcommand
+	libraryCmd.AddCommand(syncCmd)
+
 	return libraryCmd
 }
 

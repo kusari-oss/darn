@@ -462,8 +462,8 @@ func (c *Config) GetLibraryDiagnostics() map[string]interface{} {
 	return c.LibraryManager.GetDiagnostics()
 }
 
-// ValidateShellCommand validates that a shell command exists and is executable
-func (c *Config) ValidateShellCommand(command string) error {
+// ValidateCommand validates that a command exists and is executable
+func (c *Config) ValidateCommand(command string) error {
 	if c.LibraryManager == nil {
 		c.LibraryManager = library.NewManager(c.LibraryPath, c.CmdLineLibraryPath, false)
 	}
