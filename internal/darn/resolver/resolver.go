@@ -18,6 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/kusari-oss/darn/internal/core/action"
+	"github.com/kusari-oss/darn/internal/core/library"
 )
 
 // Resolver handles finding and loading actions based on configuration
@@ -403,4 +404,34 @@ func hasAnyMatchingValue(actionValues, selectorValues []string) bool {
 		}
 	}
 	return false
+}
+
+// ValidateLibraryPaths validates that all configured library paths exist and are accessible
+func (r *Resolver) ValidateLibraryPaths() []error {
+	var errors []error
+	
+	for _, path := range r.actionPaths {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			errors = append(errors, fmt.Errorf("action path does not exist: %s", path))
+		} else if err != nil {
+			errors = append(errors, fmt.Errorf("cannot access action path %s: %w", path, err))
+		}
+	}
+	
+	return errors
+}
+
+// ValidateActionCommand validates that an action's shell command exists and is executable
+func (r *Resolver) ValidateActionCommand(actionConfig *action.Config) error {
+	if actionConfig.Type != "shell" && actionConfig.Type != "cli" {
+		return nil // Only validate shell/cli commands
+	}
+	
+	if actionConfig.Command == "" {
+		return fmt.Errorf("action '%s' has empty command", actionConfig.Name)
+	}
+	
+	// Use library manager for validation
+	manager := library.NewManager("", "", false)
+	return manager.ValidateShellCommand(actionConfig.Command)
 }
