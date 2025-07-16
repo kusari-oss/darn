@@ -16,14 +16,7 @@ parameters:
     required: false
     default: "."
     description: "Directory where to create the file (defaults to current directory)"
-type: "shell"
-implementation:
-  command: "sh"
-  args: 
-    - "-c"
-    - |
-      if [ ! -d "{{.directory}}" ]; then
-        mkdir -p "{{.directory}}"
-      fi
-      echo "{{.content}}" > "{{.directory}}/{{.filename}}"
-      echo "Created file: {{.directory}}/{{.filename}}"
+type: "file"
+template_path: "create-file.txt"
+target_path: "{{.directory}}/{{.filename}}"
+create_dirs: true
